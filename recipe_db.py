@@ -36,10 +36,22 @@ UOM_ALIASES = {
     "milliliter": "ml", "liter": "l",
     "eetlepel": "el", "eetlepels": "el", "eetl.": "el", "eetl": "el",
     "theelepel": "tl", "theelepels": "tl", "theel.": "tl", "theel": "tl",
-    "stuks": "stuk", "st": "stuk", "st.": "stuk",
-    "teentjes": "teentje", "tenen": "teentje", "teen": "teentje",
-    "kopjes": "kopje", "plakjes": "plakje", "zakjes": "zakje",
+    "st": "stuk", "st.": "stuk",
+    "tenen": "teentje", "teen": "teentje",
 }
+
+# Id's die geen echte eenheid/artikel zijn maar een markering (bijv. 9999 "UOM ontbreekt")
+SENTINEL_IDS = {9999, 99999}
+
+
+def _uom_keys(name: str) -> set[str]:
+    """'stuk(s)' → {'stuk(s)', 'stuk', 'stuks'}; 'blik(ken)' → {'blik(ken)', 'blik', 'blikken'}."""
+    n = _norm(name)
+    keys = {n}
+    m = re.fullmatch(r"(.+?)\((\w+)\)", n)
+    if m:
+        keys |= {m.group(1).strip(), (m.group(1) + m.group(2)).strip()}
+    return keys
 
 
 class RecipeError(ValueError):
@@ -60,7 +72,8 @@ def _to_int(v: Any) -> int | None:
 
 
 def _next_id(records: list[dict], col: str) -> int:
-    return max((_to_int(r.get(col)) or 0 for r in records), default=0) + 1
+    ids = [_to_int(r.get(col)) or 0 for r in records]
+    return max((i for i in ids if i not in SENTINEL_IDS), default=0) + 1
 
 
 def parse_qty(value: Any) -> float | int:
@@ -213,7 +226,11 @@ class RecipeDB:
             for col in ("NameSingle", "NamePlural"):
                 if a.get(col):
                     art_by_name.setdefault(_norm(a[col]), a)
-        uom_by_name = {_norm(u.get("UomName")): u for u in uoms if u.get("UomName")}
+        uom_by_name: dict[str, dict] = {}
+        for u in uoms:
+            if u.get("UomName") and _to_int(u.get("UomId")) not in SENTINEL_IDS:
+                for k in _uom_keys(u["UomName"]):
+                    uom_by_name.setdefault(k, u)
         next_art_id = _next_id(articles, "ArticleId")
         next_art_key = _next_id(self.records(ARTICLES), "Key")
         next_uom_id = _next_id(uoms, "UomId")
@@ -229,13 +246,18 @@ class RecipeDB:
 
                 # Eenheid
                 u_key = _norm(ing.uom) or "stuk"
-                u = uom_by_name.get(u_key) or uom_by_name.get(UOM_ALIASES.get(u_key, ""))
+                candidates = [u_key, UOM_ALIASES.get(u_key, "")]
+                for suffix in ("s", "en"):          # meervoud → enkelvoud: 'stuks' → 'stuk'
+                    if u_key.endswith(suffix) and len(u_key) > len(suffix) + 1:
+                        candidates.append(u_key[: -len(suffix)])
+                u = next((uom_by_name[c] for c in candidates if c and c in uom_by_name), None)
                 new_uom = False
                 if not u:
                     name = ing.uom.strip()
                     u = {"Key": next_uom_key, "UomId": next_uom_id, "UomName": name}
                     plan.new_uoms.append(u)
-                    uom_by_name[_norm(name)] = u
+                    for k in _uom_keys(name):
+                        uom_by_name.setdefault(k, u)
                     next_uom_id += 1
                     next_uom_key += 1
                     new_uom = True

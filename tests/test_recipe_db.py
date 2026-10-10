@@ -176,3 +176,26 @@ def test_writes_are_batched():
     db.apply(new_plan(db))
     calls = ss.worksheet("Lines").calls
     assert calls == [("append_rows", 3)]
+
+
+def test_uom_names_with_plural_suffix_and_sentinel():
+    """Echte Uom-tabel: 'stuk(s)', 'teentje(s)', 'blik(ken)' en markering 9999."""
+    ss = sample_spreadsheet()
+    ss.worksheet("Uom").rows = [
+        ["Key", "UomId", "UomName"],
+        [1, 5002, "stuk(s)"], [2, 5003, "teentje(s)"], [3, 5004, "el"],
+        [4, 5005, "g"], [5, 5014, "blik(ken)"], [6, 9999, "UOM ontbreekt"],
+    ]
+    db = db_for(ss)
+    plan = db.plan_new_recipe("Test", {}, [
+        Ingredient(qty=2, uom="stuks", article="uien"),
+        Ingredient(qty=1, uom="stuk", article="ui"),
+        Ingredient(qty=2, uom="tenen", article="ui"),
+        Ingredient(qty=1, uom="", article="ui"),
+        Ingredient(qty=2, uom="blikken", article="ui"),
+        Ingredient(qty=1, uom="eetlepel", article="ui"),
+        Ingredient(qty=1, uom="bosje", article="ui"),
+    ])
+    uom_ids = [l["UomId"] for l in plan.line_appends]
+    assert uom_ids[:6] == [5002, 5002, 5003, 5002, 5014, 5004]
+    assert plan.new_uoms == [{"Key": 7, "UomId": 5015, "UomName": "bosje"}]   # niet 10000

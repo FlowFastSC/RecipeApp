@@ -43,6 +43,14 @@ UOM_ALIASES = {
 # Id's die geen echte eenheid/artikel zijn maar een markering (bijv. 9999 "UOM ontbreekt")
 SENTINEL_IDS = {9999, 99999}
 
+# Kolommen waarin id's als TEKST staan (VLOOKUP-formules in de sheet rekenen daarop)
+TEXT_ID_COLS = {
+    "RecipeMain": {"RecipeId"},
+    "RecipeHeader": {"RecipeId"},
+    "Lines": {"RecipeId", "ArticleId"},
+    "Articles": {"ArticleId"},
+}
+
 
 def _uom_keys(name: str) -> set[str]:
     """'stuk(s)' → {'stuk(s)', 'stuk', 'stuks'}; 'blik(ken)' → {'blik(ken)', 'blik', 'blikken'}."""
@@ -221,11 +229,24 @@ class RecipeDB:
         if not ingredients:
             raise RecipeError("Een recept heeft minimaal één ingrediënt nodig")
         articles, uoms = self._lookups()
+        by_id = {_to_int(a.get("ArticleId")): a for a in articles}
         art_by_name: dict[str, dict] = {}
         for a in articles:
+            if _to_int(a.get("ArticleId")) in SENTINEL_IDS:
+                continue                      # 99999 "aa-artikel ontbreekt"
+            note = str(a.get("Delete row") or "").strip()
+            if note:
+                # Samengevoegd artikel: "replace by 10362" → verwijs naar dat artikel
+                m = re.search(r"(\d+)", note)
+                target = by_id.get(int(m.group(1))) if m else None
+                if not target:
+                    continue
+                a_match = target
+            else:
+                a_match = a
             for col in ("NameSingle", "NamePlural"):
                 if a.get(col):
-                    art_by_name.setdefault(_norm(a[col]), a)
+                    art_by_name.setdefault(_norm(a[col]), a_match)
         uom_by_name: dict[str, dict] = {}
         for u in uoms:
             if u.get("UomName") and _to_int(u.get("UomId")) not in SENTINEL_IDS:
@@ -272,7 +293,8 @@ class RecipeDB:
                             f"nieuw artikel aan te maken, of kies een bestaand artikel (zoek_artikelen)"
                         )
                     a = {"Key": next_art_key, "ArticleId": next_art_id,
-                         "NameSingle": ing.article.strip(), "NamePlural": ing.article_plural.strip()}
+                         "NameSingle": ing.article.strip(), "NamePlural": ing.article_plural.strip(),
+                         "DefaultUomId": _to_int(u["UomId"])}
                     plan.new_articles.append(a)
                     art_by_name[_norm(a["NameSingle"])] = a
                     art_by_name[_norm(a["NamePlural"])] = a
@@ -373,7 +395,7 @@ class RecipeDB:
                 raise RecipeError(f"Titel '{new_title}' is al in gebruik door RecipeId {dup['RecipeId']}")
             main = self.records(MAIN)
             idx = next(i for i, r in enumerate(main) if _to_int(r.get("RecipeId")) == recipe_id)
-            plan.main_row = {"row": idx + 2, "values": {**main[idx], "Title": new_title}}
+            plan.main_row = {"row": idx + 2, "values": {"Title": new_title}}
             changes["Titel"] = f"{current['Title']} → {new_title}"
 
         # None = veld niet wijzigen; "" = veld leegmaken
@@ -388,7 +410,7 @@ class RecipeDB:
                     "Key": _next_id(hdr, "Key"), "RecipeId": recipe_id,
                     **{f: header.get(f, "") for f in HEADER_FIELDS}}}
             else:
-                plan.header_row = {"row": idx + 2, "values": {**hdr[idx], **header}}
+                plan.header_row = {"row": idx + 2, "values": dict(header)}
             for k, v in header.items():
                 old = str(current.get(k, ""))
                 if k == "Content":
@@ -410,7 +432,7 @@ class RecipeDB:
                     key = old.get("Key") or next_key
                     if not old.get("Key"):
                         next_key += 1
-                    plan.line_updates.append({"row": row, "values": {**old, **self._line_values(recipe_id, n, key, r)}})
+                    plan.line_updates.append({"row": row, "values": self._line_values(recipe_id, n, key, r)})
                 else:
                     plan.line_appends.append(self._line_values(recipe_id, n, next_key, r))
                     next_key += 1
@@ -434,24 +456,87 @@ class RecipeDB:
         return plan
 
     # -- schrijven ------------------------------------------------------------
+    # Uitgangspunten (zie docs/DB_structuur.md):
+    # - We schrijven ALLEEN de kolommen die we zelf vullen. Andere kolommen
+    #   (formules zoals ArticlePreview, UomPreview, Replace?, PreviewUom) raken
+    #   we bij een wijziging niet aan.
+    # - Bij nieuwe rijen nemen we de formules over van de laatste rij erboven
+    #   die een formule in die kolom heeft (rijnummers worden aangepast).
+    # - RecipeId/ArticleId staan in de sheet als TEKST; die schrijven we ook als
+    #   tekst, anders werken de VLOOKUP-formules niet.
+
     @staticmethod
-    def _row(headers: list[str], values: dict) -> list:
-        return [values.get(h, "") for h in headers]
+    def _cast(sheet: str, col: str, value):
+        if value in (None, ""):
+            return ""
+        if col in TEXT_ID_COLS.get(sheet, set()):
+            return str(_to_int(value) if _to_int(value) is not None else value)
+        if col == "Persons" and _to_int(value) is not None:
+            return _to_int(value)                      # staat in de sheet als getal
+        return value
 
     def _update_rows(self, sheet: str, updates: list[dict]):
         if not updates:
             return
-        ws, headers = self.ws(sheet), self.headers(sheet)
-        last_col = _col_letter(len(headers))
-        ws.batch_update([
-            {"range": f"A{u['row']}:{last_col}{u['row']}", "values": [self._row(headers, u["values"])]}
-            for u in updates
-        ])
+        headers = self.headers(sheet)
+        data = []
+        for u in updates:
+            for col, value in u["values"].items():
+                if col in headers:
+                    cell = f"{_col_letter(headers.index(col) + 1)}{u['row']}"
+                    data.append({"range": cell, "values": [[self._cast(sheet, col, value)]]})
+        if data:
+            self.ws(sheet).batch_update(data, value_input_option="RAW")
+
+    def _formula_templates(self, sheet: str, last_row: int) -> dict[int, tuple[str, int]]:
+        """{kolomindex: (formule, rijnummer)} van de laatste rij met een formule per kolom."""
+        if last_row < 2:
+            return {}
+        headers = self.headers(sheet)
+        start = 2                                       # hele kolom: onderste rijen missen soms formules
+        rng = f"A{start}:{_col_letter(len(headers))}{last_row}"
+        rows = self.ws(sheet).get(rng, value_render_option="FORMULA")
+        templates: dict[int, tuple[str, int]] = {}
+        for offset, row in enumerate(rows):
+            for i, v in enumerate(row):
+                if isinstance(v, str) and v.startswith("="):
+                    templates[i] = (v, start + offset)
+        return templates
 
     def _append_rows(self, sheet: str, rows: list[dict]):
-        if rows:
-            headers = self.headers(sheet)
-            self.ws(sheet).append_rows([self._row(headers, r) for r in rows])
+        if not rows:
+            return
+        ws, headers = self.ws(sheet), self.headers(sheet)
+        last_row = len(ws.col_values(1))                  # kolom A (Key) is altijd gevuld
+        templates = self._formula_templates(sheet, last_row)
+        needed = last_row + len(rows) - ws.row_count
+        if needed > 0:
+            ws.add_rows(needed)
+        data = []
+        for k, row in enumerate(rows):
+            target = last_row + 1 + k
+            values = []
+            for i, h in enumerate(headers):
+                if h in row:
+                    v = self._cast(sheet, h, row[h])
+                    # USER_ENTERED: tekst met ' ervoor blijft tekst (ook '1001' en '1/2')
+                    values.append("'" + v if isinstance(v, str) and v else v)
+                elif i in templates:
+                    formula, src = templates[i]
+                    values.append(_shift_rows(formula, src, target))
+                else:
+                    values.append("")
+            end_col = _col_letter(len(headers))
+            data.append({"range": f"A{target}:{end_col}{target}", "values": [values]})
+        ws.batch_update(data, value_input_option="USER_ENTERED")
+
+    # Publieke namen, ook gebruikt door de webapp (app.py)
+    def append_rows(self, sheet: str, rows: list[dict]):
+        self._append_rows(sheet, rows)
+        self._cache = {k: v for k, v in self._cache.items() if k[0] == "ws"}
+
+    def update_cells(self, sheet: str, updates: list[dict]):
+        self._update_rows(sheet, updates)
 
     def apply(self, plan: Plan) -> None:
         # Volgorde: eerst stamgegevens, dan recept, dan regels. Verwijderen van
@@ -474,6 +559,21 @@ class RecipeDB:
             self.ws(LINES).delete_rows(row)
         self._append_rows(LINES, plan.line_appends)
         self._cache = {k: v for k, v in self._cache.items() if k[0] == "ws"}
+
+
+_REL_REF = re.compile(r"(?<![A-Za-z0-9_$!\]])(\$?[A-Z]{1,3})(\d+)(?![\d(])")
+
+
+def _shift_rows(formula: str, src_row: int, dst_row: int) -> str:
+    """Celverwijzingen van de voorbeeldrij omzetten naar de nieuwe rij: '=VLOOKUP(G2,…)' → '=VLOOKUP(G7,…)'.
+
+    De 'eigen rij' van de formule wordt uit de formule zelf afgeleid (alle relatieve
+    verwijzingen naar dezelfde rij); valt dat niet eenduidig af te leiden, dan geldt src_row.
+    Absolute rijen ($5) en verwijzingen naar andere tabbladen (Articles!B:G) blijven staan.
+    """
+    rows = {int(m.group(2)) for m in _REL_REF.finditer(formula) if not m.group(0).endswith("$")}
+    own = rows.pop() if len(rows) == 1 else src_row
+    return _REL_REF.sub(lambda m: f"{m.group(1)}{dst_row}" if int(m.group(2)) == own else m.group(0), formula)
 
 
 def _col_letter(n: int) -> str:

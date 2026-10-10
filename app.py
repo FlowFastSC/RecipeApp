@@ -3,6 +3,7 @@ import datetime
 import hmac
 import os
 
+from recipe_db import RecipeDB
 from sheets import SHEET_NAME, get_client
 
 app = Flask(__name__)
@@ -47,6 +48,11 @@ class _Client:
 
 def get_gsheet():
     return _Client(get_client())
+
+
+def _db():
+    """Veilige schrijfhulp: alleen eigen kolommen, id's als tekst, formules in nieuwe rijen overnemen."""
+    return RecipeDB(get_client().open(SHEET_NAME))
 
 
 def _remark(line):
@@ -321,7 +327,7 @@ def add_recipe():
             max_recipe_id = max((int(r['RecipeId']) for r in all_records if str(r.get('RecipeId', '')).strip().isdigit()), default=0)
             new_key, new_recipe_id = max_key + 1, max_recipe_id + 1
 
-            recipe_main_sheet.append_row([new_key, new_recipe_id, title])
+            _db().append_rows("RecipeMain", [{'Key': new_key, 'RecipeId': new_recipe_id, 'Title': title}])
             print(f"✅ Recipe '{title}' added with Key: {new_key}, RecipeId: {new_recipe_id}")
             return redirect(url_for('add_ingredients', recipe_id=new_recipe_id))
 
@@ -411,11 +417,11 @@ def add_ingredients(recipe_id):
                     'Article': display, 'ArticleRemark': ing['remark'], 'Remark': ing['remark'],
                     'SinglePlural': ing['single_plural'],
                 }
-                rows.append([line_data_dict.get(h, '') for h in headers])
+                rows.append(line_data_dict)
                 next_key += 1
                 line_id += 1
 
-            lines_sheet.append_rows(rows)   # één API-aanroep i.p.v. één per regel
+            _db().append_rows("Lines", rows)   # één API-aanroep; formules en tekst-id's correct
             print(f"✅ Added {len(rows)} ingredients for RecipeId {recipe_id}")
             return redirect(url_for('add_recipe_header', recipe_id=recipe_id))
 
@@ -504,7 +510,7 @@ def add_recipe_header(recipe_id):
                 'Persons': persons,
             }
             headers = header_sheet.row_values(1)
-            header_sheet.append_row([header_data_dict.get(h, '') for h in headers])
+            _db().append_rows("RecipeHeader", [header_data_dict])
             print(f"✅ Added recipe header with Key {next_key} for RecipeId {recipe_id}")
             return redirect(url_for('select_recipe', recipe_id=recipe_id))
 
@@ -724,12 +730,9 @@ def edit_recipe(recipe_id):
     )
 
 
-def _update_row(sheet, row_number, headers, current, changes):
-    """Schrijf een hele rij in één API-aanroep (i.p.v. update_cell per veld)."""
-    merged = {**current, **changes}
-    end_col = _col_letter(len(headers))
-    sheet.update(range_name=f"A{row_number}:{end_col}{row_number}",
-                 values=[[merged.get(h, '') for h in headers]])
+def _update_row(sheet_name, row_number, changes):
+    """Schrijf alleen de gewijzigde cellen (formules en tekst-id's blijven intact)."""
+    _db().update_cells(sheet_name, [{"row": row_number, "values": changes}])
 
 
 def _col_letter(n):
@@ -754,20 +757,19 @@ def edit_recipe_main(recipe_id):
     main_data = main_sheet.get_all_records()
     for i, row in enumerate(main_data):
         if row['RecipeId'] == recipe_id:
-            _update_row(main_sheet, i + 2, main_sheet.row_values(1), row, {'Title': new_title})
+            _update_row("RecipeMain", i + 2, {'Title': new_title})
             break
 
     header_data = header_sheet.get_all_records()
-    header_cols = header_sheet.row_values(1)
     for i, row in enumerate(header_data):
         if row['RecipeId'] == recipe_id:
-            _update_row(header_sheet, i + 2, header_cols, row, {'Link': new_link, 'Content': new_content})
+            _update_row("RecipeHeader", i + 2, {'Link': new_link, 'Content': new_content})
             break
     else:
         # Nog geen header voor dit recept → aanmaken
         next_key = max((int(h['Key']) for h in header_data if str(h.get('Key', '')).strip().isdigit()), default=0) + 1
         new = {'Key': next_key, 'RecipeId': recipe_id, 'Link': new_link, 'Content': new_content}
-        header_sheet.append_row([new.get(h, '') for h in header_cols])
+        _db().append_rows("RecipeHeader", [new])
 
     flash('Algemene gegevens opgeslagen.', 'success')
     return redirect(url_for('edit_recipe', recipe_id=recipe_id))
@@ -778,7 +780,6 @@ def edit_recipe_main(recipe_id):
 def edit_recipe_header_save(recipe_id):
     header_sheet = get_gsheet().open("Recepten").worksheet("RecipeHeader")
     header_data = header_sheet.get_all_records()
-    col_headers = header_sheet.row_values(1)
 
     persons = request.form.get('Persons', '')
     if len(persons) > 10:
@@ -788,12 +789,12 @@ def edit_recipe_header_save(recipe_id):
     changes = {f: request.form.get(f, '') for f in ['Remarks', 'Utensils', 'CookingTime', 'Persons']}
     for i, row in enumerate(header_data):
         if row['RecipeId'] == recipe_id:
-            _update_row(header_sheet, i + 2, col_headers, row, changes)
+            _update_row("RecipeHeader", i + 2, changes)
             break
     else:
         next_key = max((int(h['Key']) for h in header_data if str(h.get('Key', '')).strip().isdigit()), default=0) + 1
         new = {'Key': next_key, 'RecipeId': recipe_id, **changes}
-        header_sheet.append_row([new.get(h, '') for h in col_headers])
+        _db().append_rows("RecipeHeader", [new])
 
     flash('Gegevens opgeslagen.', 'success')
     return redirect(url_for('edit_recipe', recipe_id=recipe_id))
@@ -828,7 +829,6 @@ def save_recipe_lines(recipe_id):
 
         lines_sheet = get_gsheet().open("Recepten").worksheet("Lines")
         lines_data = lines_sheet.get_all_records()
-        col_headers = lines_sheet.row_values(1)
 
         def fields(src):
             remark = src.get('ArticleRemark', '')
@@ -847,13 +847,10 @@ def save_recipe_lines(recipe_id):
             line_id = int(update['LineId'])
             for i, row in enumerate(lines_data):
                 if row.get('LineId') == line_id and row.get('RecipeId') == recipe_id:
-                    merged = {**row, **fields(update)}
-                    end_col = _col_letter(len(col_headers))
-                    updates.append({'range': f"A{i + 2}:{end_col}{i + 2}",
-                                    'values': [[merged.get(h, '') for h in col_headers]]})
+                    updates.append({'row': i + 2, 'values': fields(update)})
                     break
         if updates:
-            lines_sheet.batch_update(updates)   # één API-aanroep voor alle regels
+            _db().update_cells("Lines", updates)   # alleen eigen kolommen, formules blijven staan
 
         # Nieuwe regels toevoegen (met Key; LineId per recept doortellen)
         if new_lines:
@@ -865,10 +862,10 @@ def save_recipe_lines(recipe_id):
             rows = []
             for new_line in new_lines:
                 values = {'Key': next_key, 'LineId': next_line_id, 'RecipeId': recipe_id, **fields(new_line)}
-                rows.append([values.get(h, '') for h in col_headers])
+                rows.append(values)
                 next_line_id += 1
                 next_key += 1
-            lines_sheet.append_rows(rows)
+            _db().append_rows("Lines", rows)
 
         return jsonify({'success': True})
     except Exception as e:

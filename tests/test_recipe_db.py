@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 
@@ -8,24 +7,28 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from fake_sheets import sample_spreadsheet  # noqa: E402
-from recipe_db import Ingredient, RecipeDB, RecipeError, parse_qty  # noqa: E402
+from recipe_db import Ingredient, RecipeDB, RecipeError, _shift_rows, parse_qty  # noqa: E402
 
 
 def db_for(ss):
     return RecipeDB(ss)
 
 
+def lines_of(ss, recipe_id):
+    return [l for l in ss.worksheet("Lines").get_all_records() if l["RecipeId"] == recipe_id]
+
+
 # ── lezen ─────────────────────────────────────────────────────────────────────
 def test_search_and_get():
-    ss = sample_spreadsheet()
-    db = db_for(ss)
+    db = db_for(sample_spreadsheet())
     assert [r["Title"] for r in db.search_recipes("soep")] == ["Linzensoep"]
     assert [r["Title"] for r in db.search_recipes(article="uien")] == ["Linzensoep"]
     r = db.get_recipe(1)
     assert r["Title"] == "Pasta pesto"
     assert [l["LineId"] for l in r["Ingredients"]] == [1, 2, 3]
     assert r["Ingredients"][1]["Article"] == "potje pesto"       # SINGLE
-    assert r["Ingredients"][2]["Remark"] == "geroosterd"           # kolom 'Remark'
+    assert r["Ingredients"][1]["Uom"] == "stuk(s)"
+    assert r["Ingredients"][2]["Remark"] == "geroosterd"           # kolom ArticleRemark
     with pytest.raises(RecipeError):
         db.get_recipe(99)
 
@@ -36,6 +39,45 @@ def test_parse_qty():
     for bad in ("0", "-1", "abc", "0.25"):
         with pytest.raises(RecipeError):
             parse_qty(bad)
+
+
+def test_shift_rows():
+    f = '=IF(H5="SINGLE",VLOOKUP(G5,Articles!B:C,2,FALSE),VLOOKUP(G5,Articles!B:D,3,FALSE))'
+    assert _shift_rows(f, 5, 12) == f.replace("H5", "H12").replace("G5", "G12")
+    assert _shift_rows("=VLOOKUP(G5,Articles!B:G,6,false)", 5, 7) == "=VLOOKUP(G7,Articles!B:G,6,false)"
+    assert _shift_rows("=$A$5+A5+A50", 5, 9) == "=$A$5+A9+A50"
+
+
+# ── eenheden en artikelen koppelen ────────────────────────────────────────────
+def test_uom_matching_real_names():
+    db = db_for(sample_spreadsheet())
+    plan = db.plan_new_recipe("Test", {}, [
+        Ingredient(qty=2, uom="stuks", article="uien"),
+        Ingredient(qty=1, uom="stuk", article="ui"),
+        Ingredient(qty=2, uom="tenen", article="ui"),
+        Ingredient(qty=1, uom="", article="ui"),
+        Ingredient(qty=1, uom="eetlepel", article="ui"),
+        Ingredient(qty=1, uom="liter", article="ui"),
+        Ingredient(qty=1, uom="stuk(s)", article="ui"),
+    ])
+    assert [l["UomId"] for l in plan.line_appends] == [5002, 5002, 5003, 5002, 5004, 5012, 5002]
+    assert plan.new_uoms == []
+
+
+def test_new_uom_id_ignores_9999():
+    db = db_for(sample_spreadsheet())
+    plan = db.plan_new_recipe("Test", {}, [Ingredient(qty=1, uom="bosje", article="ui")])
+    assert plan.new_uoms == [{"Key": 9, "UomId": 5013, "UomName": "bosje"}]
+
+
+def test_article_markers():
+    db = db_for(sample_spreadsheet())
+    # "rode linze" is samengevoegd: "replace by 3" → ArticleId 3
+    plan = db.plan_new_recipe("Test", {}, [Ingredient(qty=100, uom="g", article="rode linzen")])
+    assert plan.line_appends[0]["ArticleId"] == 3 and plan.new_articles == []
+    # 99999 "aa-artikel ontbreekt" mag nooit als match dienen
+    with pytest.raises(RecipeError, match="article_plural"):
+        db.plan_new_recipe("Test", {}, [Ingredient(qty=1, uom="g", article="aa-artikel ontbreekt")])
 
 
 # ── nieuw recept ──────────────────────────────────────────────────────────────
@@ -52,37 +94,49 @@ def test_new_recipe_plan_and_apply():
     ss = sample_spreadsheet()
     before = ss.snapshot()
     plan = new_plan(db_for(ss))
-    # voorstel schrijft niets
-    assert ss.snapshot() == before
+    assert ss.snapshot() == before                    # voorstel schrijft niets
     s = plan.summary
     assert s["RecipeId"] == 3
     assert s["Nieuwe artikelen"] == ["olijfolie / olijfolie", "peterselie / peterselie"]
     assert s["Nieuwe eenheden"] == ["bosje"]
-    assert s["Ingrediënten"][0] == "2 stuk uien (gesnipperd)"
+    assert s["Ingrediënten"][0] == "2 stuk(s) uien (gesnipperd)"
 
     db = db_for(ss)
     plan2 = new_plan(db)
-    assert plan2.fingerprint() == plan.fingerprint()   # deterministisch
+    assert plan2.fingerprint() == plan.fingerprint()  # deterministisch
     db.apply(plan2)
 
-    main = ss.worksheet("RecipeMain").get_all_records()
-    assert main[-1] == {"Key": 3, "RecipeId": 3, "Title": "Uiensoep"}
-    hdr = ss.worksheet("RecipeHeader").get_all_records()[-1]
-    assert hdr["RecipeId"] == 3 and hdr["Persons"] == "4" and hdr["Key"] == 2
+    main = ss.worksheet("RecipeMain")
+    assert main.get_all_records()[-1] == {"Key": 3, "RecipeId": 3, "Title": "Uiensoep"}
+    assert main.raw(4, "RecipeId") == "3"            # als TEKST, net als de rest
 
-    lines = [l for l in ss.worksheet("Lines").get_all_records() if l["RecipeId"] == 3]
+    hdr = ss.worksheet("RecipeHeader").get_all_records()[-1]
+    assert hdr["RecipeId"] == 3 and hdr["Persons"] == 4 and hdr["Key"] == 2
+
+    lines = lines_of(ss, 3)
     assert [l["LineId"] for l in lines] == [1, 2, 3]
     assert [l["Key"] for l in lines] == [6, 7, 8]
-    assert lines[0]["ArticleId"] == 4 and lines[0]["SinglePlural"] == "PLURAL" and lines[0]["Remark"] == "gesnipperd"
+    assert lines[0]["ArticleId"] == 4 and lines[0]["SinglePlural"] == "PLURAL"
+    assert lines[0]["ArticleRemark"] == "gesnipperd"
     assert lines[1]["UomId"] == 5004 and lines[1]["SinglePlural"] == "SINGLE"
     assert lines[2]["Qty"] == 0.5
 
-    arts = ss.worksheet("Articles").get_all_records()
-    assert arts[-2]["ArticleId"] == 6 and arts[-1]["ArticleId"] == 7 and arts[-1]["Key"] == 8
-    uoms = ss.worksheet("Uom").get_all_records()
-    assert uoms[-1] == {"Key": 6, "UomId": 5007, "UomName": "bosje"}
+    ws = ss.worksheet("Lines")
+    first_new = 7                                     # rij 1 kop + 5 data → rij 7
+    assert ws.raw(first_new, "RecipeId") == "3" and ws.raw(first_new, "ArticleId") == "4"
+    assert ws.raw(first_new, "UomId") == 5002          # UomId blijft een getal
+    # formules overgenomen van de rij erboven, met aangepaste rijnummers
+    assert ws.raw(first_new, "ArticlePreview").startswith('=IF(H7="SINGLE",VLOOKUP(G7,')
+    assert ws.raw(first_new + 2, "Replace?") == "=VLOOKUP(G9,Articles!B:G,6,false)"
 
-    # het recept is direct weer op te halen
+    arts = ss.worksheet("Articles")
+    new_arts = arts.get_all_records()[-2:]
+    assert [a["ArticleId"] for a in new_arts] == [100000, 100001] or [a["ArticleId"] for a in new_arts] == [7, 8]
+    assert new_arts[0]["DefaultUomId"] == 5004        # eenheid van de regel
+    assert arts.raw(9, "ArticleId") == "7" and arts.raw(9, "PreviewUom").startswith("=ARRAYFORMULA(VLOOKUP(E9,")
+    uoms = ss.worksheet("Uom").get_all_records()
+    assert uoms[-1] == {"Key": 9, "UomId": 5013, "UomName": "bosje"}
+
     r = db_for(ss).get_recipe(3)
     assert [l["Article"] for l in r["Ingredients"]] == ["uien", "olijfolie", "peterselie"]
 
@@ -102,7 +156,7 @@ def test_new_recipe_validation():
 def test_fingerprint_changes_when_db_changes():
     ss = sample_spreadsheet()
     code = new_plan(db_for(ss)).fingerprint()
-    ss.worksheet("RecipeMain").append_row([3, 3, "Iets anders"])
+    ss.worksheet("RecipeMain").rows.append([3, "3", "Iets anders"])
     assert new_plan(db_for(ss)).fingerprint() != code
 
 
@@ -117,14 +171,17 @@ def test_update_header_and_title_only():
     assert w["CookingTime"] == "20 min → 25 min"
     assert "Link" not in w
     db.apply(plan)
-    assert ss.worksheet("RecipeMain").get_all_records()[0]["Title"] == "Pasta met pesto"
+    assert ss.worksheet("RecipeMain").raw(2, "Title") == "Pasta met pesto"
+    assert ss.worksheet("RecipeMain").raw(2, "RecipeId") == "1"          # onaangeroerd
     hdr = ss.worksheet("RecipeHeader").get_all_records()[0]
     assert hdr["CookingTime"] == "25 min" and hdr["Link"] == "https://example.com/pesto"
     assert ss.snapshot()["Lines"] == lines_before
 
 
-def test_update_ingredients_shrink_and_grow():
+def test_update_ingredients_keeps_formulas():
     ss = sample_spreadsheet()
+    ws = ss.worksheet("Lines")
+    formula_before = ws.raw(2, "ArticlePreview")
     db = db_for(ss)
     # recept 1 had 3 regels (rij 2, 3 en 6); nu 2 regels
     plan = db.plan_update_recipe(1, None, {}, [
@@ -133,24 +190,29 @@ def test_update_ingredients_shrink_and_grow():
     ])
     assert plan.line_deletes == [6]
     db.apply(plan)
-    lines = ss.worksheet("Lines").get_all_records()
-    r1 = [l for l in lines if l["RecipeId"] == 1]
-    assert [(l["LineId"], l["Qty"], l["Remark"]) for l in r1] == [(1, 250, ""), (2, 1, "groen")]
+    r1 = lines_of(ss, 1)
+    assert [(l["LineId"], l["Qty"], l["ArticleRemark"]) for l in r1] == [(1, 250, ""), (2, 1, "groen")]
     assert [l["Key"] for l in r1] == [1, 2]                      # bestaande keys behouden
-    assert len([l for l in lines if l["RecipeId"] == 2]) == 2      # ander recept onaangeroerd
+    assert ws.raw(2, "ArticlePreview") == formula_before         # formule niet overschreven
+    assert ws.raw(2, "RecipeId") == "1"
+    assert len(lines_of(ss, 2)) == 2                             # ander recept onaangeroerd
+    # alleen eigen kolommen geschreven, met RAW
+    assert ("batch_update", 16, "RAW") in ws.calls
 
     # groeien: 4 regels
     db = db_for(ss)
-    plan = db.plan_update_recipe(1, None, {}, [
+    db.apply(db.plan_update_recipe(1, None, {}, [
         Ingredient(qty=250, uom="g", article="pasta"),
         Ingredient(qty=1, uom="stuk", article="potje pesto", remark="groen"),
         Ingredient(qty=2, uom="el", article="pijnboompitten"),
         Ingredient(qty=1, uom="teentje", article="knoflook", article_plural="knoflook"),
-    ])
-    db.apply(plan)
-    r1 = [l for l in ss.worksheet("Lines").get_all_records() if l["RecipeId"] == 1]
+    ]))
+    r1 = lines_of(ss, 1)
     assert [l["LineId"] for l in r1] == [1, 2, 3, 4]
-    assert len({l["Key"] for l in ss.worksheet("Lines").get_all_records()}) == len(ss.worksheet("Lines").rows) - 1
+    keys = [l["Key"] for l in ws.get_all_records()]
+    assert len(keys) == len(set(keys))
+    last = len(ws.rows)
+    assert ws.raw(last, "UomPreview") == f"=ARRAYFORMULA(VLOOKUP(E{last},Uom!B:C,2,FALSE))"
 
 
 def test_update_without_changes_is_error():
@@ -167,35 +229,14 @@ def test_header_created_when_missing():
     db = db_for(ss)
     db.apply(db.plan_update_recipe(2, None, {"Persons": "6"}, None))
     hdr = [h for h in ss.worksheet("RecipeHeader").get_all_records() if h["RecipeId"] == 2]
-    assert hdr and hdr[0]["Persons"] == "6" and hdr[0]["Key"] == 2
+    assert hdr and hdr[0]["Persons"] == 6 and hdr[0]["Key"] == 2
+    assert ss.worksheet("RecipeHeader").raw(3, "RecipeId") == "2"
 
 
-def test_writes_are_batched():
+def test_sheet_grows_when_full():
     ss = sample_spreadsheet()
+    ws = ss.worksheet("Lines")
+    ws.row_count = len(ws.rows)                       # raster precies vol
     db = db_for(ss)
     db.apply(new_plan(db))
-    calls = ss.worksheet("Lines").calls
-    assert calls == [("append_rows", 3)]
-
-
-def test_uom_names_with_plural_suffix_and_sentinel():
-    """Echte Uom-tabel: 'stuk(s)', 'teentje(s)', 'blik(ken)' en markering 9999."""
-    ss = sample_spreadsheet()
-    ss.worksheet("Uom").rows = [
-        ["Key", "UomId", "UomName"],
-        [1, 5002, "stuk(s)"], [2, 5003, "teentje(s)"], [3, 5004, "el"],
-        [4, 5005, "g"], [5, 5014, "blik(ken)"], [6, 9999, "UOM ontbreekt"],
-    ]
-    db = db_for(ss)
-    plan = db.plan_new_recipe("Test", {}, [
-        Ingredient(qty=2, uom="stuks", article="uien"),
-        Ingredient(qty=1, uom="stuk", article="ui"),
-        Ingredient(qty=2, uom="tenen", article="ui"),
-        Ingredient(qty=1, uom="", article="ui"),
-        Ingredient(qty=2, uom="blikken", article="ui"),
-        Ingredient(qty=1, uom="eetlepel", article="ui"),
-        Ingredient(qty=1, uom="bosje", article="ui"),
-    ])
-    uom_ids = [l["UomId"] for l in plan.line_appends]
-    assert uom_ids[:6] == [5002, 5002, 5003, 5002, 5014, 5004]
-    assert plan.new_uoms == [{"Key": 7, "UomId": 5015, "UomName": "bosje"}]   # niet 10000
+    assert ("add_rows", 3) in ws.calls

@@ -137,5 +137,35 @@ def test_flask_pages(env):
         "new": [{"ArticleId": "1", "Qty": "100", "UomId": "5005", "ArticleRemark": "", "SinglePlural": "PLURAL"}]})
     assert r.json() == {"success": True}
     r2 = [l for l in ss.worksheet("Lines").get_all_records() if l["RecipeId"] == 2]
-    assert r2[1]["Qty"] == 2 and r2[1]["Remark"] == "fijn"
+    assert r2[1]["Qty"] == 2 and r2[1]["ArticleRemark"] == "fijn"
     assert r2[2]["LineId"] == 3 and r2[2]["Key"] == 6 and r2[2]["Qty"] == 100
+
+
+def test_webapp_writes_keep_sheet_structure(env):
+    client, ss = env
+    auth = ("recepten", "geheim")
+    lines = ss.worksheet("Lines")
+    formula_row2 = lines.raw(2, "ArticlePreview")
+
+    # bestaande regel bewerken + nieuwe regel via het bewerkscherm
+    r = client.post("/save_recipe_lines/2", auth=auth, json={
+        "existing": [{"LineId": 1, "ArticleId": "3", "Qty": "300", "UomId": "5005",
+                      "ArticleRemark": "", "SinglePlural": "PLURAL"}],
+        "new": [{"ArticleId": "4", "Qty": "1", "UomId": "5002", "ArticleRemark": "", "SinglePlural": "SINGLE"}]})
+    assert r.json() == {"success": True}
+    assert lines.raw(2, "ArticlePreview") == formula_row2          # formule van ander recept intact
+    row4 = 4                                                        # recept 2, LineId 1
+    assert lines.raw(row4, "Qty") == 300 and lines.raw(row4, "RecipeId") == "2"
+    assert lines.raw(row4, "ArticlePreview").startswith("=IF(H4=")  # formule niet overschreven
+    last = len(lines.rows)
+    assert lines.raw(last, "RecipeId") == "2" and lines.raw(last, "ArticleId") == "4"
+    assert lines.raw(last, "Replace?") == f"=VLOOKUP(G{last},Articles!B:G,6,false)"
+
+    # titel wijzigen raakt RecipeId niet
+    client.post("/edit_recipe_main/1", auth=auth, data={"Title": "Pasta pesto!", "Link": "x", "Content": "y"})
+    main = ss.worksheet("RecipeMain")
+    assert main.raw(2, "Title") == "Pasta pesto!" and main.raw(2, "RecipeId") == "1"
+
+    # nieuw recept via de webapp: RecipeId als tekst
+    client.post("/add", auth=auth, data={"title": "Nieuw gerecht"})
+    assert main.raw(len(main.rows), "RecipeId") == "3"

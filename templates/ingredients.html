@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ingrediënten</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* ── Ingredient cards ── */
+        .ingredient-card {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            gap: 12px;
+        }
+        .ingredient-card:last-child { border-bottom: none; }
+        .ingredient-card:nth-child(even) { background: #f7f5ff; }
+
+        .ingredient-left {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 0;
+        }
+        .ingredient-name {
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: #222;
+        }
+        .ingredient-meta {
+            font-size: 0.82rem;
+            color: #888;
+            margin-top: 2px;
+            font-style: italic;
+        }
+
+        .ingredient-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .ingredient-badge {
+            background: var(--primary-color, #2697cf);
+            color: #fff;
+            border-radius: 20px;
+            padding: 5px 14px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        /* ── Collapse content wrapper ── */
+        .collapse-content {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            overflow: hidden;
+            margin-bottom: 4px;
+        }
+
+        /* ── Week selector ── */
+        .week-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 16px 0;
+            flex-wrap: wrap;
+        }
+        .week-selector select {
+            padding: 7px 12px;
+            border: 1px solid #ccc;
+            border-radius: 7px;
+            font-size: 0.9rem;
+        }
+        .week-selector button {
+            background: var(--primary-color, #2697cf);
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 7px 16px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .week-selector button:hover { opacity: 0.88; }
+
+        /* ── Sort bar ── */
+        .sort-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            font-size: 0.85rem;
+            color: #666;
+        }
+        .sort-bar select {
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+
+        .recipe-label {
+            font-size: 0.75rem;
+            background: #e3f2fd;
+            color: #1565c0;
+            border-radius: 10px;
+            padding: 2px 8px;
+            font-weight: 600;
+            white-space: nowrap;
+            display: inline-block;
+            margin-top: 4px;
+        }
+
+        .empty-msg {
+            padding: 24px;
+            text-align: center;
+            color: #999;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── Header ── -->
+    <div class="header compact-header">
+        <a href="/weekly_recipes" class="back-button" title="Terug naar weekmenu">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div class="header-content">
+            <div class="header-title">Ingrediënten</div>
+            <div class="header-subtitle">Week {{ selected_week }} &nbsp;·&nbsp; {{ start_date }} – {{ end_date }}</div>
+        </div>
+    </div>
+
+    <div class="content-wrapper">
+        <div class="container white-card">
+
+            <!-- ── Week selector ── -->
+            <form method="POST" action="{{ url_for('ingredients') }}">
+                <div class="week-selector">
+                    <label for="weekSelect">Week:</label>
+                    <select id="weekSelect" name="selected_week">
+                        <option value="{{ prev_week }}"   {% if prev_week   == selected_week %}selected{% endif %}>Week {{ prev_week }}</option>
+                        <option value="{{ current_week }}" {% if current_week == selected_week %}selected{% endif %}>Week {{ current_week }}</option>
+                        <option value="{{ next_week_1 }}" {% if next_week_1 == selected_week %}selected{% endif %}>Week {{ next_week_1 }}</option>
+                        <option value="{{ next_week_2 }}" {% if next_week_2 == selected_week %}selected{% endif %}>Week {{ next_week_2 }}</option>
+                    </select>
+                    <button type="submit"><i class="fas fa-sync-alt"></i> Update</button>
+                </div>
+            </form>
+
+            <!-- ── Sort bar ── -->
+            <div class="sort-bar">
+                <span>Sorteren op:</span>
+                <select id="sortSelect" onchange="sortCards()">
+                    <option value="name" selected>Ingredientnaam</option>
+                    <option value="recipe">Recept</option>
+                </select>
+            </div>
+
+            <!-- ── Ingredient cards ── -->
+            <div class="collapse-content">
+                <div id="ingredientList">
+                    {% set sorted_items = ingredients_list | sort(attribute='NamePlural') %}
+                    {% for item in sorted_items %}
+                    <div class="ingredient-card"
+                         data-name="{{ item.NamePlural | lower }}"
+                         data-recipe="{{ item.Title | lower }}">
+                        <div class="ingredient-left">
+                            <div class="ingredient-name">{{ item.NamePlural or '–' }}</div>
+                            {% if item.ArticleRemark %}
+                            <div class="ingredient-meta">{{ item.ArticleRemark }}</div>
+                            {% endif %}
+                        <div class="ingredient-meta" style="margin-top: 8px;">
+                                <span class="recipe-label">{{ item.Title }}</span>
+                            </div>
+                        </div>
+                        <div class="ingredient-right">
+                            <div class="ingredient-badge">
+                                {{ item.Qty or '' }} {{ item.UomNamePlural or '' }}
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="empty-msg">Geen ingrediënten gevonden voor week {{ selected_week }}.</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function sortCards() {
+            const sortBy = document.getElementById('sortSelect').value;
+            const list = document.getElementById('ingredientList');
+            const cards = Array.from(list.querySelectorAll('.ingredient-card'));
+
+            cards.sort((a, b) => {
+                const valA = a.dataset[sortBy === 'name' ? 'name' : 'recipe'];
+                const valB = b.dataset[sortBy === 'name' ? 'name' : 'recipe'];
+                return valA.localeCompare(valB, 'nl');
+            });
+
+            cards.forEach(card => list.appendChild(card));
+        }
+    </script>
+
+</body>
+</html>

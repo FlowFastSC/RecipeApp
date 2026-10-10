@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selecteer recept</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .selector-section {
+            display: none;
+            margin-top: 1.5em;
+        }
+        #recipeIframe {
+            width: 100%;
+            min-height: 600px;
+            border: 1px solid #eee;
+            margin-top: 1.5em;
+            border-radius: 10px;
+        }
+
+        /* Icon button row */
+        .action-buttons {
+            display: flex;
+            flex-direction: row;
+            gap: 1em;
+            margin-top: 1em;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .action-buttons form {
+            margin: 0;
+        }
+
+        /* Square icon button with label underneath */
+        .icon-btn-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3em;
+        }
+        .icon-btn-wrap span {
+            font-size: 0.7em;
+            color: var(--text-color);
+            text-align: center;
+            max-width: 70px;
+            line-height: 1.2;
+        }
+        .icon-btn {
+            width: 60px;
+            height: 60px;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 1.4em;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+        }
+        .icon-btn:hover {
+            transform: scale(1.05);
+        }
+        .icon-btn-blue  { background-color: var(--primary-color); }
+        .icon-btn-green { background-color: #4caf50; }
+
+        select.form-select {
+            width: 100%;
+            padding: 10px 14px;
+            font-size: 1em;
+            border-radius: 20px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            margin-bottom: 0.8em;
+            appearance: none;
+            background-color: var(--white-color);
+            color: var(--text-color);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 0.3em;
+            margin-top: 0.8em;
+        }
+
+        /* Ingredient results table */
+        #matchingRecipes { margin-top: 1.5em; }
+
+        /* Table action buttons: also icon style */
+        .table-action-buttons {
+            display: flex;
+            flex-direction: row;
+            gap: 0.6em;
+            align-items: flex-start;
+        }
+        .table-action-buttons form { margin: 0; }
+
+        @media (max-width: 600px) {
+            #matchingRecipes thead { display: none; }
+            #matchingRecipes tr {
+                display: block;
+                margin-bottom: 1em;
+                border: 1px solid #ddd;
+                border-radius: 10px;
+                padding: 0.5em;
+                background-color: var(--white-color);
+                box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            }
+            #matchingRecipes td {
+                display: block;
+                border: none;
+                padding: 0.3em 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="header compact-header">
+        <a href="/weekly_recipes" class="back-button" title="Terug naar weekmenu">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div class="header-content">
+            <div class="header-title">Selecteer recept</div>
+        </div>
+    </div>
+
+    <div class="content-wrapper">
+        <div class="container white-card">
+
+            <!-- Choice buttons -->
+            <div id="choiceButtons">
+                <button class="btn" style="display:block; width:100%; max-width:350px; margin:0.5em auto;" onclick="showSelector('title')">Op titel</button>
+                <button class="btn" style="display:block; width:100%; max-width:350px; margin:0.5em auto;" onclick="showSelector('ingredient')">Op ingredient</button>
+            </div>
+
+            <!-- Title Selection Section -->
+            <div id="selector-title" class="selector-section">
+                <div class="section">
+                    <div class="section-title">Selecteer op titel</div>
+                    <label for="titleSelect">Kies recepttitel:</label>
+                    <select id="titleSelect" class="form-select">
+                        <option value="">Kies een titel</option>
+                    </select>
+
+                    <div class="action-buttons">
+                        <!-- Toon recept -->
+                        <div class="icon-btn-wrap">
+                            <button class="icon-btn icon-btn-blue" onclick="showRecipeIframeFromTitle()" title="Toon recept">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <span>Toon recept</span>
+                        </div>
+                        <!-- Voeg toe aan weekmenu -->
+                        <form method="POST" action="/add_to_weekmenu">
+                            <input type="hidden" name="RecipeId" id="titleRecipeIdInput">
+                            <input type="hidden" name="Week" value="{{ selected_week }}">
+                            <div class="icon-btn-wrap">
+                                <button type="submit" class="icon-btn icon-btn-green" onclick="return setTitleRecipeId()" title="Voeg toe aan weekmenu">
+                                    <i class="fas fa-calendar-plus"></i>
+                                </button>
+                                <span>Voeg toe aan weekmenu</span>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ingredient Selection Section -->
+            <div id="selector-ingredient" class="selector-section">
+                <div class="section">
+                    <div class="section-title">Selecteer op ingredient</div>
+                    <label for="nameSingleSelect">Kies artikel:</label>
+                    <select id="nameSingleSelect" class="form-select">
+                        <option value="">Kies een artikel</option>
+                    </select>
+                    <button class="btn" onclick="fetchRecipesBySelectedName()">Zoek recepten</button>
+
+                    <div id="matchingRecipes" style="display:none;">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Titel</th>
+                                    <th>Acties</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recipeTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Iframe for selected recipe -->
+            <iframe id="recipeIframe" style="display:none;"></iframe>
+
+        </div>
+    </div>
+
+    <script>
+        const selectedWeek = {{ selected_week|default('null') }};
+
+        function showSelector(type) {
+            document.getElementById('choiceButtons').style.display = 'none';
+            document.getElementById('selector-title').style.display = (type === 'title') ? 'block' : 'none';
+            document.getElementById('selector-ingredient').style.display = (type === 'ingredient') ? 'block' : 'none';
+            document.getElementById('recipeIframe').style.display = 'none';
+        }
+
+        function setTitleRecipeId() {
+            const recipeId = document.getElementById('titleSelect').value;
+            if (!recipeId) {
+                alert('Kies eerst een recepttitel.');
+                return false;
+            }
+            document.getElementById('titleRecipeIdInput').value = recipeId;
+            return true;
+        }
+
+        window.addEventListener('DOMContentLoaded', function() {
+            fetch('/list_recipe_titles')
+                .then(res => res.json())
+                .then(data => {
+                    const select = document.getElementById('titleSelect');
+                    data.forEach(recipe => {
+                        const opt = document.createElement('option');
+                        opt.value = recipe.RecipeId;
+                        opt.textContent = recipe.Title;
+                        select.appendChild(opt);
+                    });
+                });
+
+            fetch('/list_article_names')
+                .then(res => res.json())
+                .then(data => {
+                    const select = document.getElementById('nameSingleSelect');
+                    data.forEach(article => {
+                        const opt = document.createElement('option');
+                        opt.value = article.NameSingle;
+                        opt.textContent = article.NameSingle;
+                        select.appendChild(opt);
+                    });
+                });
+        });
+
+        function showRecipeIframeFromTitle() {
+            const recipeId = document.getElementById('titleSelect').value;
+            if (!recipeId) return alert('Kies een recepttitel.');
+            showRecipeIframe(recipeId);
+        }
+
+        function showRecipeIframe(recipeId) {
+            const iframe = document.getElementById('recipeIframe');
+            iframe.src = '/select_recipe/' + encodeURIComponent(recipeId);
+            iframe.style.display = 'block';
+            iframe.scrollIntoView({behavior: "smooth"});
+        }
+
+        function fetchRecipesBySelectedName() {
+            const nameSingle = document.getElementById('nameSingleSelect').value;
+            if (!nameSingle) return alert('Kies een artikel.');
+
+            fetch(`/fetch_recipes_by_article?NameSingle=${encodeURIComponent(nameSingle)}`)
+                .then(res => res.json())
+                .then(data => {
+                    const tableBody = document.getElementById('recipeTableBody');
+                    const recipeDiv = document.getElementById('matchingRecipes');
+                    tableBody.innerHTML = '';
+                    if (data.length > 0) {
+                        recipeDiv.style.display = 'block';
+                        data.forEach(recipe => {
+                            const row = document.createElement('tr');
+
+                            let actionButtons = `
+                                <div class="icon-btn-wrap">
+                                    <button class="icon-btn icon-btn-blue" onclick="showRecipeIframe('${recipe.RecipeId}')" title="Toon recept">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <span>Toon recept</span>
+                                </div>
+                            `;
+
+                            if (selectedWeek) {
+                                actionButtons += `
+                                    <form method="POST" action="/add_to_weekmenu">
+                                        <input type="hidden" name="RecipeId" value="${recipe.RecipeId}">
+                                        <input type="hidden" name="Week" value="${selectedWeek}">
+                                        <div class="icon-btn-wrap">
+                                            <button type="submit" class="icon-btn icon-btn-green" title="Voeg toe aan weekmenu">
+                                                <i class="fas fa-calendar-plus"></i>
+                                            </button>
+                                            <span>Voeg toe aan weekmenu</span>
+                                        </div>
+                                    </form>
+                                `;
+                            }
+
+                            row.innerHTML = `
+                                <td>${recipe.Title}</td>
+                                <td>
+                                    <div class="table-action-buttons">
+                                        ${actionButtons}
+                                    </div>
+                                </td>
+                            `;
+                            tableBody.appendChild(row);
+                        });
+                    } else {
+                        recipeDiv.style.display = 'none';
+                        alert('Geen recepten gevonden voor dit artikel.');
+                    }
+                });
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recept details toevoegen</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .form-row {
+            margin-bottom: 20px;
+        }
+        .form-row label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.88rem;
+            color: var(--primary-color, #2697cf);
+            margin-bottom: 6px;
+        }
+        .form-row .field-hint {
+            font-size: 0.78rem;
+            color: #999;
+            font-style: italic;
+            margin-bottom: 6px;
+        }
+        .form-row input[type="text"],
+        .form-row input[type="url"],
+        .form-row textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: #fafafa;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .form-row input:focus,
+        .form-row textarea:focus {
+            outline: none;
+            border-color: var(--primary-color, #2697cf);
+            box-shadow: 0 0 0 3px rgba(38,151,207,0.15);
+        }
+        .form-row textarea {
+            resize: vertical;
+            min-height: 90px;
+        }
+        .form-row textarea.content-area {
+            min-height: 220px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        .form-row .narrow {
+            max-width: 200px;
+        }
+
+        .edit-section {
+            background: var(--white-color, #fff);
+            border-radius: 10px;
+            box-shadow: 0px 4px 6px rgba(0,0,0,0.08);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .edit-section h3 {
+            color: var(--primary-color, #2697cf);
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-size: 1rem;
+            font-weight: 700;
+            border-bottom: 2px solid var(--primary-color, #2697cf);
+            padding-bottom: 6px;
+        }
+
+        /* Progress steps */
+        .progress-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .progress-step {
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+        .progress-step.done {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+        .progress-step.active {
+            background: var(--primary-color, #2697cf);
+            color: #fff;
+        }
+        .progress-step.pending {
+            background: #e9ecef;
+            color: #999;
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 12px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .btn-save {
+            background: #2e7d32;
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 10px 28px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-save:hover { background: #1b5e20; }
+        .btn-cancel {
+            background: #78909c;
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 10px 22px;
+            font-size: 1rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+        .btn-cancel:hover { background: #546e7a; }
+    </style>
+</head>
+<body>
+
+    <!-- ── Header ── -->
+    <div class="header compact-header">
+        <a href="/add_ingredients/{{ recipe_id }}" class="back-button" title="Terug naar ingrediënten">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div class="header-content">
+            <div class="header-title">Recept details</div>
+            <div class="header-subtitle">{{ recipe_title }}</div>
+        </div>
+    </div>
+
+    <div class="content-wrapper">
+        <div class="container white-card">
+
+            <!-- Progress -->
+            <div class="progress-bar">
+                <span class="progress-step done"><i class="fas fa-check"></i> Titel</span>
+                <span class="progress-step done"><i class="fas fa-check"></i> Ingrediënten</span>
+                <span class="progress-step active"><i class="fas fa-pen"></i> Details</span>
+            </div>
+
+            <form id="headerForm" method="POST">
+
+                <!-- ── Algemeen ── -->
+                <div class="edit-section">
+                    <h3><i class="fas fa-info-circle"></i> Algemeen</h3>
+
+                    <div class="form-row">
+                        <label for="link">Link naar origineel recept</label>
+                        <input type="url" id="link" name="link"
+                               placeholder="https://www.example.com/recept">
+                    </div>
+                    <div class="form-row">
+                        <label for="cooking_time">Bereidingstijd</label>
+                        <input type="text" id="cooking_time" name="cooking_time"
+                               placeholder="bijv. 30 minuten" maxlength="50" class="narrow">
+                    </div>
+                    <div class="form-row">
+                        <label for="persons">Aantal personen</label>
+                        <input type="text" id="persons" name="persons"
+                               placeholder="4" maxlength="10" class="narrow">
+                    </div>
+                </div>
+
+                <!-- ── Opmerkingen & benodigdheden ── -->
+                <div class="edit-section">
+                    <h3><i class="fas fa-sticky-note"></i> Opmerkingen & benodigdheden</h3>
+
+                    <div class="form-row">
+                        <label for="utensils">Keukenbenodigdheden</label>
+                        <div class="field-hint">Speciale pannen, apparaten of gereedschap</div>
+                        <textarea id="utensils" name="utensils"
+                                  placeholder="bijv. grote braadpan, staafmixer"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <label for="remarks">Opmerkingen</label>
+                        <div class="field-hint">Tips, alternatieven of belangrijke notities</div>
+                        <textarea id="remarks" name="remarks"
+                                  placeholder="bijv. kan een dag van tevoren worden bereid..."></textarea>
+                    </div>
+                </div>
+
+                <!-- ── Bereiding ── -->
+                <div class="edit-section">
+                    <h3><i class="fas fa-utensils"></i> Bereidingswijze</h3>
+
+                    <div class="form-row">
+                        <textarea id="content" name="content" class="content-area"
+                                  placeholder="Stap 1: Verwarm de oven voor op 180°C...
+Stap 2: Snijd de uien fijn...
+Stap 3: Verhit olie in een pan..."></textarea>
+                    </div>
+                </div>
+
+                <div class="action-bar">
+                    <button type="submit" class="btn-save">
+                        <i class="fas fa-check"></i> Recept voltooien
+                    </button>
+                    <a href="/" class="btn-cancel">
+                        <i class="fas fa-times"></i> Annuleren
+                    </a>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Auto-resize textareas
+        document.querySelectorAll('textarea').forEach(function(ta) {
+            ta.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = this.scrollHeight + 'px';
+            });
+        });
+
+        // Focus first field
+        window.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('link').focus();
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recept bewerken – {{ recipe['Title'] }}</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* ── Edit-page specific styles ── */
+        .edit-section {
+            background: var(--white-color, #fff);
+            border-radius: 10px;
+            box-shadow: 0px 4px 6px rgba(0,0,0,0.08);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .edit-section h3 {
+            color: var(--primary-color, #2697cf);
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-size: 1rem;
+            font-weight: 700;
+            border-bottom: 2px solid var(--primary-color, #2697cf);
+            padding-bottom: 6px;
+        }
+        .form-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .form-row label {
+            min-width: 90px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #555;
+        }
+        .form-row input[type="text"],
+        .form-row input[type="number"],
+        .form-row select,
+        .form-row textarea {
+            flex: 1;
+            min-width: 0;
+            padding: 6px 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            background: #fafafa;
+        }
+        .form-row textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        /* Ingredient lines table */
+        .ingredient-line {
+            display: grid;
+            grid-template-columns: 2fr 80px 120px 110px 1.2fr 1.2fr 36px;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 8px 10px;
+            background: #f5fafd;
+            border-radius: 8px;
+            border: 1px solid #ddeef8;
+        }
+        .name-preview {
+            font-size: 0.82rem;
+            color: #555;
+            font-style: italic;
+            padding: 4px 6px;
+            background: #eef6fb;
+            border-radius: 5px;
+            min-height: 28px;
+            display: flex;
+            align-items: center;
+        }
+        .ingredient-line input,
+        .ingredient-line select {
+            padding: 5px 8px;
+            border: 1px solid #bcd;
+            border-radius: 5px;
+            font-size: 0.88rem;
+            background: #fff;
+            width: 100%;
+        }
+        .ingredient-line .col-header {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--primary-color, #2697cf);
+            padding-bottom: 2px;
+        }
+        .btn-delete-line {
+            background: #e53935;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+        .btn-delete-line:hover { background: #b71c1c; }
+
+        .btn-add-line {
+            background: var(--primary-color, #2697cf);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 7px 16px;
+            font-size: 0.88rem;
+            cursor: pointer;
+            margin-top: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-add-line:hover { opacity: 0.88; }
+
+        .btn-save {
+            background: #2e7d32;
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 10px 28px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-save:hover { background: #1b5e20; }
+
+        .btn-cancel {
+            background: #78909c;
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 10px 22px;
+            font-size: 1rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-cancel:hover { background: #546e7a; }
+
+        .action-bar {
+            display: flex;
+            gap: 12px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .flash-msg {
+            padding: 10px 16px;
+            border-radius: 7px;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+        .flash-success { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+        .flash-error   { background: #ffebee; color: #b71c1c; border: 1px solid #ef9a9a; }
+
+        /* Column headers row above ingredient lines */
+        .ingredient-col-headers {
+            display: grid;
+            grid-template-columns: 2fr 80px 120px 110px 1.2fr 1.2fr 36px;
+            gap: 8px;
+            padding: 0 10px 4px 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--primary-color, #2697cf);
+        }
+
+        @media (max-width: 600px) {
+            .ingredient-line {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto auto;
+            }
+            .ingredient-col-headers { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header compact-header">
+        <a href="javascript:history.back()" class="back-button" title="Terug">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div class="header-content">
+            <div class="header-title">Recept bewerken</div>
+            <div class="header-subtitle">{{ recipe['Title'] }}</div>
+        </div>
+    </div>
+
+    <div class="content-wrapper">
+        <div class="container white-card">
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    <div class="flash-msg flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endwith %}
+
+            <!-- ══════════════════════════════════════
+                 SECTIE 1 – ALGEMENE RECEPTGEGEVENS
+            ══════════════════════════════════════ -->
+            <div class="edit-section">
+                <h3><i class="fas fa-info-circle"></i> Algemene gegevens</h3>
+                <form method="POST" action="/edit_recipe_main/{{ recipe['RecipeId'] }}">
+                    <div class="form-row">
+                        <label for="title">Titel</label>
+                        <input type="text" id="title" name="Title" value="{{ recipe['Title'] }}" required>
+                    </div>
+                    <div class="form-row">
+                        <label for="link">Link</label>
+                        <input type="text" id="link" name="Link" value="{{ header.get('Link', '') }}">
+                    </div>
+                    <div class="form-row">
+                        <label for="content">Recepttekst</label>
+                        <textarea id="content" name="Content">{{ header.get('Content', '') }}</textarea>
+                    </div>
+                    <div class="action-bar">
+                        <button type="submit" class="btn-save"><i class="fas fa-save"></i> Opslaan</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ══════════════════════════════════════
+                 SECTIE 2 – OVERIGE HEADERGEGEVENS
+            ══════════════════════════════════════ -->
+            <div class="edit-section">
+                <h3><i class="fas fa-sticky-note"></i> Overige gegevens</h3>
+                <form method="POST" action="/edit_recipe_header/{{ recipe['RecipeId'] }}">
+                    <div class="form-row">
+                        <label for="remarks">Opmerking</label>
+                        <input type="text" id="remarks" name="Remarks"
+                               value="{{ header.get('Remarks', '') }}">
+                    </div>
+                    <div class="form-row">
+                        <label for="utensils">Benodigdheden</label>
+                        <input type="text" id="utensils" name="Utensils"
+                               value="{{ header.get('Utensils', '') }}">
+                    </div>
+                    <div class="form-row">
+                        <label for="cookingtime">Bereidingstijd</label>
+                        <input type="text" id="cookingtime" name="CookingTime"
+                               value="{{ header.get('CookingTime', '') }}">
+                    </div>
+                    <div class="form-row">
+                        <label for="persons">Personen</label>
+                        <input type="text" id="persons" name="Persons"
+                               value="{{ header.get('Persons', '') }}" maxlength="10">
+                    </div>
+                    <div class="action-bar">
+                        <button type="submit" class="btn-save"><i class="fas fa-save"></i> Opslaan</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ══════════════════════════════════════
+                 SECTIE 3 – INGREDIËNTEN (Lines)
+            ══════════════════════════════════════ -->
+            <div class="edit-section">
+                <h3><i class="fas fa-list-ul"></i> Ingrediënten</h3>
+
+                <!-- Column headers -->
+                <div class="ingredient-col-headers">
+                    <span>Artikel</span>
+                    <span>Aantal</span>
+                    <span>Eenheid</span>
+                    <span>Enkv/Meerv</span>
+                    <span>Opmerking</span>
+                    <span>Naam weergave</span>
+                    <span></span>
+                </div>
+
+                <div id="ingredientLines">
+                    {% for line in lines %}
+                    <div class="ingredient-line" id="line-{{ line.LineId }}">
+                        <!-- Article dropdown -->
+                        <select name="ArticleId" class="article-select" data-lineid="{{ line.LineId }}"
+                                onchange="updateNamePreview(this.closest('.ingredient-line'))">
+                            <option value="">– kies artikel –</option>
+                            {% for article in all_articles %}
+                                <option value="{{ article.ArticleId }}"
+                                    {% if article.ArticleId == line.ArticleId %}selected{% endif %}>
+                                    {{ article.NameSingle }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <!-- Qty -->
+                        <input type="number" step="0.01" name="Qty" value="{{ line.Qty or '' }}"
+                               class="qty-input" data-lineid="{{ line.LineId }}" placeholder="0">
+                        <!-- Uom dropdown -->
+                        <select name="UomId" class="uom-select" data-lineid="{{ line.LineId }}">
+                            <option value="">– eenheid –</option>
+                            {% for uom in all_uoms %}
+                                <option value="{{ uom.UomId }}"
+                                    {% if uom.UomId == line.UomId %}selected{% endif %}>
+                                    {{ uom.UomName }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <!-- SinglePlural dropdown -->
+                        <select name="SinglePlural" class="singleplural-select"
+                                onchange="updateNamePreview(this.closest('.ingredient-line'))">
+                            <option value="SINGLE" {% if line.get('SinglePlural') == 'SINGLE' %}selected{% endif %}>Enkelvoud</option>
+                            <option value="PLURAL" {% if line.get('SinglePlural', 'PLURAL') == 'PLURAL' %}selected{% endif %}>Meervoud</option>
+                        </select>
+                        <!-- Remark -->
+                        <input type="text" name="ArticleRemark" value="{{ line.ArticleRemark or '' }}"
+                               class="remark-input" data-lineid="{{ line.LineId }}" placeholder="opmerking">
+                        <!-- Name preview -->
+                        <div class="name-preview" data-preview></div>
+                        <!-- Delete button -->
+                        <button type="button" class="btn-delete-line"
+                                onclick="deleteLine({{ line.LineId }}, this)"
+                                title="Verwijder regel">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                    {% else %}
+                    <p style="color:#999; font-style:italic;">Nog geen ingrediënten.</p>
+                    {% endfor %}
+                </div>
+
+                <!-- New line template (hidden, cloned by JS) -->
+                <div id="newLineTemplate" style="display:none;">
+                    <div class="ingredient-line new-line">
+                        <select name="ArticleId" class="article-select"
+                                onchange="updateNamePreview(this.closest('.ingredient-line'))">
+                            <option value="">– kies artikel –</option>
+                            {% for article in all_articles %}
+                                <option value="{{ article.ArticleId }}">{{ article.NameSingle }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="number" step="0.01" name="Qty" placeholder="0">
+                        <select name="UomId" class="uom-select">
+                            <option value="">– eenheid –</option>
+                            {% for uom in all_uoms %}
+                                <option value="{{ uom.UomId }}">{{ uom.UomName }}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="SinglePlural" class="singleplural-select"
+                                onchange="updateNamePreview(this.closest('.ingredient-line'))">
+                            <option value="SINGLE">Enkelvoud</option>
+                            <option value="PLURAL" selected>Meervoud</option>
+                        </select>
+                        <input type="text" name="ArticleRemark" placeholder="opmerking">
+                        <div class="name-preview" data-preview></div>
+                        <button type="button" class="btn-delete-line"
+                                onclick="removeNewLine(this)" title="Verwijder">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="button" class="btn-add-line" onclick="addNewLine()">
+                    <i class="fas fa-plus"></i> Nieuwe ingrediëntregel
+                </button>
+
+                <!-- Save all lines button -->
+                <div class="action-bar" style="margin-top:18px;">
+                    <button type="button" class="btn-save" onclick="saveAllLines()">
+                        <i class="fas fa-save"></i> Alle regels opslaan
+                    </button>
+                    <a href="/select_recipe/{{ recipe['RecipeId'] }}" class="btn-cancel">
+                        <i class="fas fa-times"></i> Annuleren
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const recipeId = {{ recipe['RecipeId'] }};
+
+        // ── Artikeldata voor naam-preview (ArticleId → {single, plural}) ──────
+        const articleData = {
+            {% for article in all_articles %}
+            "{{ article.ArticleId }}": {
+                single: {{ article.NameSingle | tojson }},
+                plural: {{ article.NamePlural | tojson }}
+            },
+            {% endfor %}
+        };
+
+        // ── Update naam-preview op basis van artikel + single/plural keuze ────
+        function updateNamePreview(lineDiv) {
+            const articleId = lineDiv.querySelector('[name="ArticleId"]').value;
+            const singlePlural = lineDiv.querySelector('[name="SinglePlural"]').value;
+            const preview = lineDiv.querySelector('[data-preview]');
+            if (!preview) return;
+            if (!articleId || !articleData[articleId]) {
+                preview.textContent = '';
+                return;
+            }
+            preview.textContent = singlePlural === 'SINGLE'
+                ? articleData[articleId].single
+                : articleData[articleId].plural;
+        }
+
+        // ── Initialiseer previews bij paginaload ──────────────────────────────
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('#ingredientLines .ingredient-line').forEach(div => {
+                updateNamePreview(div);
+            });
+        });
+
+        // ── Delete existing line ──────────────────────────────────────────────
+        // Gebruik RecipeId + LineId: LineId is NIET globaal uniek!
+        function deleteLine(lineId, btn) {
+            if (!confirm('Regel verwijderen?')) return;
+            fetch(`/delete_recipe_line/${recipeId}/${lineId}`, { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById(`line-${lineId}`).remove();
+                    } else {
+                        alert('Fout bij verwijderen: ' + (data.error || ''));
+                    }
+                });
+        }
+
+        // ── Add new (unsaved) line row ────────────────────────────────────────
+        function addNewLine() {
+            const template = document.getElementById('newLineTemplate');
+            const clone = template.querySelector('.ingredient-line').cloneNode(true);
+            document.getElementById('ingredientLines').appendChild(clone);
+        }
+
+        // ── Remove unsaved new-line row ───────────────────────────────────────
+        function removeNewLine(btn) {
+            btn.closest('.ingredient-line').remove();
+        }
+
+        // ── Save ALL lines (existing + new) ───────────────────────────────────
+        function saveAllLines() {
+            const container = document.getElementById('ingredientLines');
+            const allLineDivs = container.querySelectorAll('.ingredient-line');
+            const existingLines = [];
+            const newLines = [];
+
+            allLineDivs.forEach(div => {
+                const lineId = div.id ? div.id.replace('line-', '') : null;
+                const articleId = div.querySelector('[name="ArticleId"]').value;
+                const qty = div.querySelector('[name="Qty"]').value;
+                const uomId = div.querySelector('[name="UomId"]').value;
+                const remark = div.querySelector('[name="ArticleRemark"]').value;
+                const singlePlural = div.querySelector('[name="SinglePlural"]').value;
+
+                if (lineId && !div.classList.contains('new-line')) {
+                    existingLines.push({ LineId: lineId, ArticleId: articleId, Qty: qty, UomId: uomId, ArticleRemark: remark, SinglePlural: singlePlural });
+                } else {
+                    if (articleId) {
+                        newLines.push({ ArticleId: articleId, Qty: qty, UomId: uomId, ArticleRemark: remark, SinglePlural: singlePlural });
+                    }
+                }
+            });
+
+            fetch(`/save_recipe_lines/${recipeId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ existing: existingLines, new: newLines })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    history.back();
+                } else {
+                    alert('Fout bij opslaan: ' + (data.error || ''));
+                }
+            });
+        }
+    </script>
+</body>
+</html>

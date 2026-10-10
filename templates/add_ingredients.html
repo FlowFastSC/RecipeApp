@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ingrediënten toevoegen</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* ── Ingredient line grid ── */
+        .ingredient-line {
+            display: grid;
+            grid-template-columns: 80px 120px 2fr 100px 1.5fr 1.5fr 36px;
+            gap: 8px;
+            align-items: end;
+            margin-bottom: 10px;
+            padding: 10px 12px;
+            background: #f5fafd;
+            border-radius: 8px;
+            border: 1px solid #ddeef8;
+        }
+        .ingredient-col-headers {
+            display: grid;
+            grid-template-columns: 80px 120px 2fr 100px 1.5fr 1.5fr 36px;
+            gap: 8px;
+            padding: 0 12px 4px 12px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--primary-color, #2697cf);
+        }
+        .ingredient-line input,
+        .ingredient-line select {
+            padding: 5px 8px;
+            border: 1px solid #bcd;
+            border-radius: 5px;
+            font-size: 0.88rem;
+            background: #fff;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .ingredient-line input:focus,
+        .ingredient-line select:focus {
+            outline: none;
+            border-color: var(--primary-color, #2697cf);
+        }
+
+        /* ── Name preview ── */
+        .name-preview {
+            font-size: 0.82rem;
+            color: #555;
+            font-style: italic;
+            padding: 5px 8px;
+            background: #eef6fb;
+            border-radius: 5px;
+            min-height: 30px;
+            display: flex;
+            align-items: center;
+            border: 1px solid #ddeef8;
+        }
+
+        /* ── Delete button ── */
+        .btn-delete-line {
+            background: #e53935;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+        .btn-delete-line:hover { background: #b71c1c; }
+        .btn-delete-line:disabled {
+            background: #ccc;
+            cursor: default;
+        }
+
+        /* ── Add line button ── */
+        .btn-add-line {
+            background: var(--primary-color, #2697cf);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 7px 16px;
+            font-size: 0.88rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .btn-add-line:hover { opacity: 0.88; }
+
+        /* ── Section card ── */
+        .edit-section {
+            background: var(--white-color, #fff);
+            border-radius: 10px;
+            box-shadow: 0px 4px 6px rgba(0,0,0,0.08);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .edit-section h3 {
+            color: var(--primary-color, #2697cf);
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-size: 1rem;
+            font-weight: 700;
+            border-bottom: 2px solid var(--primary-color, #2697cf);
+            padding-bottom: 6px;
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 12px;
+            margin-top: 18px;
+            flex-wrap: wrap;
+        }
+        .btn-save {
+            background: #2e7d32;
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 10px 28px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-save:hover { background: #1b5e20; }
+        .btn-cancel {
+            background: #78909c;
+            color: #fff;
+            border: none;
+            border-radius: 7px;
+            padding: 10px 22px;
+            font-size: 1rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+        .btn-cancel:hover { background: #546e7a; }
+
+        @media (max-width: 700px) {
+            .ingredient-line,
+            .ingredient-col-headers { grid-template-columns: 1fr 1fr; }
+            .ingredient-col-headers { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── Header ── -->
+    <div class="header compact-header">
+        <a href="javascript:history.back()" class="back-button" title="Terug">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div class="header-content">
+            <div class="header-title">Ingrediënten toevoegen</div>
+            <div class="header-subtitle">{{ recipe_title }}</div>
+        </div>
+    </div>
+
+    <div class="content-wrapper">
+        <div class="container white-card">
+
+            <form id="ingredientsForm" method="POST">
+
+                <div class="edit-section">
+                    <h3><i class="fas fa-list-ul"></i> Ingrediënten</h3>
+
+                    <!-- Column headers -->
+                    <div class="ingredient-col-headers">
+                        <span>Aantal</span>
+                        <span>Eenheid</span>
+                        <span>Artikel</span>
+                        <span>Enkv/Meerv</span>
+                        <span>Naam weergave</span>
+                        <span>Opmerking</span>
+                        <span></span>
+                    </div>
+
+                    <div id="ingredientLines">
+                        <!-- First line rendered on load -->
+                        <div class="ingredient-line" data-line="1">
+                            <input type="number" step="0.1" min="0" name="qty_1" id="qty_1"
+                                   placeholder="1" class="qty-input">
+                            <select name="uom_1" id="uom_1">
+                                <option value="">– eenheid –</option>
+                                {% for uom in uom_data %}
+                                <option value="{{ uom.UomName }}">{{ uom.UomName }}</option>
+                                {% endfor %}
+                            </select>
+                            <select name="article_1" id="article_1"
+                                    onchange="updatePreview(this.closest('.ingredient-line'))">
+                                <option value="">– kies artikel –</option>
+                                {% for article in articles_data %}
+                                <option value="{{ article.NameSingle }}"
+                                        data-single="{{ article.NameSingle }}"
+                                        data-plural="{{ article.NamePlural }}">
+                                    {{ article.NameSingle }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <select name="singleplural_1" id="singleplural_1"
+                                    onchange="updatePreview(this.closest('.ingredient-line'))">
+                                <option value="SINGLE">Enkelvoud</option>
+                                <option value="PLURAL" selected>Meervoud</option>
+                            </select>
+                            <div class="name-preview" data-preview></div>
+                            <input type="text" name="remark_1" id="remark_1"
+                                   placeholder="opmerking (max 20)" maxlength="20">
+                            <button type="button" class="btn-delete-line" disabled title="Minimaal 1 regel vereist">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn-add-line" onclick="addLine()">
+                        <i class="fas fa-plus"></i> Voeg regel toe
+                    </button>
+                </div>
+
+                <div class="action-bar">
+                    <button type="submit" class="btn-save">
+                        <i class="fas fa-save"></i> Opslaan
+                    </button>
+                    <a href="/" class="btn-cancel">
+                        <i class="fas fa-times"></i> Annuleren
+                    </a>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ── Artikeldata voor naam-preview ─────────────────────────────────────
+        const articleData = {};
+        {% for article in articles_data %}
+        articleData[{{ article.NameSingle | tojson }}] = {
+            single: {{ article.NameSingle | tojson }},
+            plural: {{ article.NamePlural | tojson }}
+        };
+        {% endfor %}
+
+        // ── Update naam-preview ───────────────────────────────────────────────
+        function updatePreview(lineDiv) {
+            const articleVal = lineDiv.querySelector('[name^="article_"]').value;
+            const spVal      = lineDiv.querySelector('[name^="singleplural_"]').value;
+            const preview    = lineDiv.querySelector('[data-preview]');
+            if (!preview) return;
+            if (!articleVal || !articleData[articleVal]) {
+                preview.textContent = '';
+                return;
+            }
+            preview.textContent = spVal === 'SINGLE'
+                ? articleData[articleVal].single
+                : articleData[articleVal].plural;
+        }
+
+        // ── Voeg nieuwe regel toe ─────────────────────────────────────────────
+        let lineCount = 1;
+        function addLine() {
+            lineCount++;
+            const n = lineCount;
+            const container = document.getElementById('ingredientLines');
+
+            // Build UOM options from first line (already populated by Jinja)
+            const uomOptions = document.getElementById('uom_1').innerHTML;
+            // Build article options from first line
+            const articleOptions = document.getElementById('article_1').innerHTML;
+
+            const div = document.createElement('div');
+            div.className = 'ingredient-line';
+            div.setAttribute('data-line', n);
+            div.innerHTML = `
+                <input type="number" step="0.1" min="0" name="qty_${n}" id="qty_${n}" placeholder="1" class="qty-input">
+                <select name="uom_${n}" id="uom_${n}">${uomOptions}</select>
+                <select name="article_${n}" id="article_${n}"
+                        onchange="updatePreview(this.closest('.ingredient-line'))">${articleOptions}</select>
+                <select name="singleplural_${n}" id="singleplural_${n}"
+                        onchange="updatePreview(this.closest('.ingredient-line'))">
+                    <option value="SINGLE">Enkelvoud</option>
+                    <option value="PLURAL" selected>Meervoud</option>
+                </select>
+                <div class="name-preview" data-preview></div>
+                <input type="text" name="remark_${n}" id="remark_${n}" placeholder="opmerking (max 20)" maxlength="20">
+                <button type="button" class="btn-delete-line" onclick="removeLine(this)" title="Verwijder regel">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            `;
+            container.appendChild(div);
+            div.querySelector(`#qty_${n}`).focus();
+        }
+
+        // ── Verwijder regel ───────────────────────────────────────────────────
+        function removeLine(btn) {
+            btn.closest('.ingredient-line').remove();
+        }
+
+        // ── Validatie bij submit ──────────────────────────────────────────────
+        document.getElementById('ingredientsForm').addEventListener('submit', function(e) {
+            const lines = document.querySelectorAll('.ingredient-line');
+            let valid = true;
+            lines.forEach(line => {
+                const n = line.getAttribute('data-line');
+                const qty     = document.getElementById(`qty_${n}`)?.value.trim();
+                const article = document.getElementById(`article_${n}`)?.value;
+                if ((qty || article) && (!qty || !article)) {
+                    alert(`Regel ${n}: vul zowel Aantal als Artikel in.`);
+                    valid = false;
+                }
+            });
+            if (!valid) e.preventDefault();
+        });
+    </script>
+
+</body>
+</html>

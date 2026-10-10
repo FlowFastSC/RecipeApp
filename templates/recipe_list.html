@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kies recept om te bewerken</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .search-bar {
+            width: 100%;
+            padding: 9px 14px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+        .search-bar:focus {
+            outline: none;
+            border-color: var(--primary-color, #2697cf);
+        }
+        .recipe-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .recipe-list li {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-bottom: 1px solid #eee;
+            transition: background 0.12s;
+        }
+        .recipe-list li:last-child {
+            border-bottom: none;
+        }
+        .recipe-list li:hover {
+            background: #f0f8ff;
+        }
+        .recipe-title {
+            font-size: 0.95rem;
+            color: #333;
+        }
+        .btn-edit {
+            background: var(--primary-color, #2697cf);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 5px 14px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .btn-edit:hover {
+            opacity: 0.85;
+        }
+        .empty-msg {
+            color: #999;
+            font-style: italic;
+            padding: 20px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header compact-header">
+        <a href="/" class="back-button" title="Terug naar Home">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div class="header-content">
+            <div class="header-title">Bewerk recept</div>
+            <div class="header-subtitle">Kies een recept</div>
+        </div>
+    </div>
+
+    <div class="content-wrapper">
+        <div class="container white-card">
+            <input type="text" class="search-bar" id="searchInput"
+                   placeholder="Zoek op naam..." onkeyup="filterList()">
+
+            <ul class="recipe-list" id="recipeList">
+                {% for recipe in recipes %}
+                <li data-title="{{ recipe.Title | lower }}">
+                    <span class="recipe-title">{{ recipe.Title }}</span>
+                    <a href="/edit_recipe/{{ recipe.RecipeId }}" class="btn-edit">
+                        <i class="fas fa-pencil-alt"></i> Bewerken
+                    </a>
+                </li>
+                {% else %}
+                <li><p class="empty-msg">Geen recepten gevonden.</p></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function filterList() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            document.querySelectorAll('#recipeList li').forEach(li => {
+                const title = li.dataset.title || '';
+                li.style.display = title.includes(query) ? '' : 'none';
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekmenu</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+        .info-item { display: flex; flex-direction: column; align-items: center; background-color: var(--white-color); padding: 10px; border-radius: 10px; box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);}
+        .small-text { font-weight: bold; color: var(--primary-color); margin-bottom: 4px; }
+        .full-width { grid-column: span 4; text-align: center;}
+        @media (max-width: 992px) { .info-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .info-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <!-- Styled Header-->
+    <div class="header compact-header">
+        <a href="/" class="back-button" title="Terug naar Home">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div class="header-content">
+            <div class="header-title">Menu Week {{ selected_week }}</div>
+            <div class="header-subtitle">{{ start_date }} tot {{ end_date }}</div>
+        </div>
+    </div>
+    <div class="content-wrapper">
+        <div class="container white-card">
+            <!-- Dropdown for Week Selection -->
+            <form method="POST" action="{{ url_for('weekly_recipes') }}" style="display: flex; align-items: center; margin-top: 20px;">
+                <label for="weekSelect" style="margin-right: 8px;">Select Week:</label>
+                <select id="weekSelect" name="selected_week" class="form-control" style="width: auto; display: inline-block;">
+                    <option value="{{ prev_week }}" {% if prev_week == selected_week %}selected{% endif %}>Week {{ prev_week }}</option>
+                    <option value="{{ current_week }}" {% if current_week == selected_week %}selected{% endif %}>Week {{ current_week }}</option>
+                    <option value="{{ next_week_1 }}" {% if next_week_1 == selected_week %}selected{% endif %}>Week {{ next_week_1 }}</option>
+                    <option value="{{ next_week_2 }}" {% if next_week_2 == selected_week %}selected{% endif %}>Week {{ next_week_2 }}</option>
+                </select>
+                <button type="submit" class="btn btn-primary" style="margin-left: 8px;">Update</button>
+            </form>
+
+            <!-- Weekly Recipes Table -->
+            <h3>Recepten voor geselecteerde week:</h3>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Titel</th>
+                        <th>Bekijk recept</th>
+                        <th>Delete</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for recipe in weekly_recipes %}
+                        <tr>
+                            <td>{{ recipe['Title'] }}</td>
+                            <td>
+                                <a href="{{ url_for('select_recipe', recipe_id=recipe['RecipeId']) }}" class="btn btn-primary">Bekijk Recept</a>
+                            </td>
+                            {% if week_status != 'approved' %}
+                                <td>
+                                    <form method="POST" action="{{ url_for('delete_recipe') }}">
+                                        <input type="hidden" name="RecipeId" value="{{ recipe['RecipeId'] }}">
+                                        <input type="hidden" name="Key" value="{{ recipe['Key'] }}">
+                                        <button type="submit" class="btn btn-danger">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            {% endif %}
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="3">Geen recepten</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div> <!-- end .container.white-card -->
+    </div> <!-- end .content-wrapper -->
+
+    <!-- Button bar -->
+    <div class="button-bar">
+        <form method="POST" action="{{ url_for('toggle_status') }}">
+            <input type="hidden" name="week" value="{{ selected_week }}">
+            <button type="submit"
+                    class="btn square-btn"
+                    style="background-color: {% if week_status == 'approved' %}red{% else %}green{% endif %};">
+                {% if week_status == 'approved' %}
+                    <i class="fas fa-lock"></i>
+                {% else %}
+                    <i class="fas fa-lock-open"></i>
+                {% endif %}
+            </button>
+        </form>
+
+        {% if weekly_count < 7 %}
+            <a href="{{ url_for('add_recipe_to_weekmenu') }}" class="btn square-btn btn-primary">
+                <i class="fas fa-plus"></i>
+            </a>
+        {% endif %}
+
+        <a href="{{ url_for('ingredients') }}" class="btn square-btn btn-secondary">
+            <i class="fas fa-carrot"></i>
+        </a>
+    </div>
+</body>
+</html>

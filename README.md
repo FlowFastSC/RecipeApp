@@ -28,10 +28,26 @@ pytest                                                # tests
 
 `.env` wordt niet automatisch ingelezen. Zet de variabelen in je shell, of gebruik `GOOGLE_CREDENTIALS_FILE=credentials.json`.
 
-## Deployen op Unraid met Coolify
+## Huidige productie-inrichting
 
-1. **Coolify → New Resource → Application.** Kies de GitHub-repo (via de GitHub App of als private repo met deploy key), branch `main`.
-2. **Build pack:** `Dockerfile`. **Port:** `8000`.
+| Onderdeel | Waarde |
+|---|---|
+| Server | Unraid `192.168.3.177`, Coolify-project **Recepten** → app `recipe-app` (uuid `1apirkkbwtvrvflz8bw5yff9`) |
+| Container | Dockerfile, poort 8000, gemapt op host-poort **3020** |
+| Publiek | `https://recepten.francinenielander.nl` via Cloudflare-tunnel `pallet-stacker` → `http://192.168.3.177:3020` |
+| Deploy | GitHub Action `.github/workflows/deploy.yml`: bij elke push naar `main` → tests → Coolify-API-deploy |
+
+**Eenmalig nodig voor automatisch deployen:**
+1. Coolify → *Settings* → zet **API Access** aan.
+2. Coolify → *Keys & Tokens* → **API tokens** → nieuw token met recht *deploy*.
+3. GitHub → repo → *Settings → Secrets and variables → Actions* → **New repository secret** `COOLIFY_TOKEN` met dat token.
+
+Handmatig deployen kan altijd: Coolify → app → **Actions → Deploy**, of op GitHub *Actions → Test en deploy → Run workflow*.
+
+## Deployen op Unraid met Coolify (opnieuw opzetten)
+
+1. **Coolify → New Resource → Public Git Repository** (of GitHub App bij een private repo), branch `main`.
+2. **Build pack:** `Dockerfile`. **Ports exposes:** `8000`, **Port mappings:** `3020:8000`.
 3. **Environment variables** (zie `.env.example`):
 
    | Variabele | Waarde |
@@ -43,9 +59,9 @@ pytest                                                # tests
    | `APP_PASSWORD` | Optioneel: wachtwoord voor de webapp |
 
    Willekeurige strings maak je met `python -c "import secrets;print(secrets.token_urlsafe(32))"`.
-4. **Domain:** koppel het domein of de tunnel die je in Coolify beheert. HTTPS is nodig voor de Claude-connector.
-5. **Automatisch deployen:** zet *Auto Deploy* aan. Elke push naar `main` rolt dan automatisch uit.
-6. Controleer na deploy: `https://<jouw-domein>/health` geeft `ok`.
+   Zet bij de geheime variabelen alleen *Runtime* aan (niet *Buildtime*).
+4. **Cloudflare-tunnel:** voeg in de tunnel een *published application* toe: `recepten.<domein>` → `http://192.168.3.177:3020`. HTTPS is nodig voor de Claude-connector.
+5. Controleer na deploy: `https://<jouw-domein>/health` geeft `ok`.
 
 ## Claude-connector (recepten toevoegen en wijzigen vanuit Claude)
 

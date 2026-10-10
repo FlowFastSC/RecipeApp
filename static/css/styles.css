@@ -1,0 +1,244 @@
+/* Global box-sizing to prevent layout overflow */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+/* Color scheme variables */
+:root {
+    --primary-color: #6a67ce;
+    --secondary-color: #f0e3ff;
+    --accent-color: #ffab8d;
+    --text-color: #333;
+    --background-color: #f0f0f0;
+    --white-color: #ffffff;
+    --gray-color: #f8f9fa;
+}
+
+/* General styles for all pages */
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 10px;
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    background-color: var(--white-color);
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.header {
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--primary-color) 100%);
+    color: var(--white-color);
+    padding: 20px;
+    text-align: center;
+    font-size: 1.5em;
+    border-radius: 15px 15px 0 0;
+}
+
+.section {
+    background-color: var(--gray-color);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.section-title {
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+}
+
+.btn {
+    background-color: var(--primary-color);
+    color: var(--white-color);
+    display: inline-block;
+    border: none;
+    padding: 10px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 16px;
+    width: auto;
+    text-align: center;
+    margin: 10px auto; /* Horizontal overflow fix */
+    text-decoration: none;
+}
+
+.btn:hover {
+    background-color: #5a52b7;
+    text-decoration: none;
+}
+
+.btn:focus {
+    outline: none;
+    text-decoration: none;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+    .container {
+        width: 100%;
+        padding: 15px;
+    }
+}
+/* Compact header layout */
+.compact-header {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+    position: relative;
+    justify-content: center;
+}
+
+.back-button {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--white-color);
+    font-size: 1.2em;
+    text-decoration: none;
+}
+
+.back-button:hover {
+    color: #ffffffcc;
+}
+
+.header-content {
+    text-align: center;
+    flex: 1;
+}
+
+.header-title {
+    font-size: 1.6em;
+    font-weight: bold;
+}
+
+.header-subtitle {
+    font-size: 0.95em;
+    margin-top: 4px;
+    color: var(--white-color);
+    opacity: 0.9;
+}
+
+/* Wrapper that ensures full height layout */
+.content-wrapper {
+    background-color: var(--background-color);
+    min-height: calc(100vh - 80px); /* 80px is approximate height of header */
+    padding: 30px 0;
+}
+
+/* White card container with padding and shadow */
+.white-card {
+    background-color: var(--white-color);
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* Ensure table inside has light shadow too (optional, for extra depth) */
+.table {
+    background-color: var(--white-color);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+
+/* Table styles */
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.table th, .table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--gray-color);
+}
+
+.table th {
+    background-color: var(--primary-color);
+    color: var(--white-color);
+    font-weight: bold;
+}
+
+.table tr:nth-child(even) {
+    background-color: var(--gray-color);
+}
+
+.table tr:hover {
+    background-color: var(--secondary-color);
+}
+
+.button-bar {
+    display: flex;
+    justify-content: space-around;
+    gap: 10px;
+    margin-top: 30px;
+    flex-wrap: wrap;
+}
+
+.square-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 15px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4em;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+}
+
+.square-btn:hover {
+    transform: scale(1.05);
+}
+
+
+/* Dropdown menu styles */
+.dropdown {
+    width: auto;
+    padding: 8px 16px;
+    font-size: 16px;
+    color: var(--white-color);
+    background-color: var(--primary-color);
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.dropdown:focus {
+    outline: none;
+    box-shadow: 0px 0px 8px rgba(0, 123, 255, 0.3);
+}
+
+.dropdown option {
+    padding: 8px;
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+
+.dropdown::after {
+    content: '\25BC';
+    font-size: 12px;
+    color: var(--white-color);
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+}

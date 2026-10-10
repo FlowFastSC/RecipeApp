@@ -29,7 +29,7 @@ jobs:
           if [ -z "$COOLIFY_TOKEN" ]; then
             echo "::error::GitHub-secret COOLIFY_TOKEN ontbreekt (zie README)"; exit 1
           fi
-          code=$(curl -sS -o resp.txt -w '%{http_code}' \
+          code=$(curl -sS -X POST -o resp.txt -w '%{http_code}' \
             -H "Authorization: Bearer $COOLIFY_TOKEN" \
             -H "Accept: application/json" \
             "$COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_APP_UUID&force=false" || echo "000")

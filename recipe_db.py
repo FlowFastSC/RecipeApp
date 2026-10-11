@@ -6,7 +6,7 @@ DB_structuur staan hier op één plek:
 - Key           : per tabblad oplopend (max + 1)
 - RecipeId      : oplopend in RecipeMain
 - LineId        : uniek PER recept (1..n), niet globaal
-- SinglePlural  : "SINGLE" als Qty <= 1, anders "PLURAL" (tenzij expliciet opgegeven)
+- SinglePlural  : afgeleid uit eenheid + Qty (zie single_plural_for)
 - Qty           : numeriek, max 1 decimaal
 - Remark        : max 20 tekens
 - Persons       : max 10 tekens
@@ -62,6 +62,27 @@ def _uom_keys(name: str) -> set[str]:
     return keys
 
 
+# Eenheden waarbij je het artikel zelf telt: "1 ui" / "2 uien".
+# Bij alle andere eenheden (g, el, blik(ken), teentje(s) …) is het artikel een
+# stofnaam en blijft het enkelvoud: "250 g spitskool", "2 blik(ken) tomatenblokjes".
+COUNT_UOM_KEYS = {"", ".", "stuk", "stuks", "stuk(s)"}
+
+
+def single_plural_for(qty, uom_name) -> str:
+    """Bepaal SINGLE/PLURAL automatisch.
+
+    - telbare eenheid (stuk(s), ".", geen eenheid): SINGLE bij Qty <= 1, anders PLURAL
+    - elke andere eenheid: altijd SINGLE
+    """
+    if not (_uom_keys(uom_name or "") & COUNT_UOM_KEYS):
+        return "SINGLE"
+    try:
+        q = float(str(qty).strip().replace(",", "."))
+    except (TypeError, ValueError):
+        q = 1
+    return "PLURAL" if q > 1 else "SINGLE"
+
+
 class RecipeError(ValueError):
     """Fout die aan de gebruiker getoond kan worden."""
 
@@ -109,7 +130,6 @@ class Ingredient:
     article: str
     remark: str = ""
     article_plural: str | None = None   # alleen nodig voor een NIEUW artikel
-    single_plural: str | None = None    # "SINGLE" / "PLURAL"; leeg = afleiden uit qty
 
 
 @dataclass
@@ -302,9 +322,7 @@ class RecipeDB:
                     next_art_key += 1
                     new_art = True
 
-                sp = (ing.single_plural or "").upper() or ("SINGLE" if qty <= 1 else "PLURAL")
-                if sp not in ("SINGLE", "PLURAL"):
-                    raise RecipeError(f"single_plural moet SINGLE of PLURAL zijn (was {ing.single_plural})")
+                sp = single_plural_for(qty, u["UomName"])
                 display = a["NameSingle"] if sp == "SINGLE" else a["NamePlural"]
                 resolved.append({
                     "Qty": qty, "UomId": _to_int(u["UomId"]), "UomName": u["UomName"],

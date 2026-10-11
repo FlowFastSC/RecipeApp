@@ -10,7 +10,7 @@
         /* ── Ingredient line grid ── */
         .ingredient-line {
             display: grid;
-            grid-template-columns: 80px 120px 2fr 100px 1.5fr 1.5fr 36px;
+            grid-template-columns: 80px 120px 2fr 1.5fr 1.5fr 36px;
             gap: 8px;
             align-items: end;
             margin-bottom: 10px;
@@ -21,7 +21,7 @@
         }
         .ingredient-col-headers {
             display: grid;
-            grid-template-columns: 80px 120px 2fr 100px 1.5fr 1.5fr 36px;
+            grid-template-columns: 80px 120px 2fr 1.5fr 1.5fr 36px;
             gap: 8px;
             padding: 0 12px 4px 12px;
             font-size: 0.75rem;
@@ -181,7 +181,6 @@
                         <span>Aantal</span>
                         <span>Eenheid</span>
                         <span>Artikel</span>
-                        <span>Enkv/Meerv</span>
                         <span>Naam weergave</span>
                         <span>Opmerking</span>
                         <span></span>
@@ -191,8 +190,10 @@
                         <!-- First line rendered on load -->
                         <div class="ingredient-line" data-line="1">
                             <input type="number" step="0.1" min="0" name="qty_1" id="qty_1"
-                                   placeholder="1" class="qty-input">
-                            <select name="uom_1" id="uom_1">
+                                   placeholder="1" class="qty-input"
+                                   oninput="updatePreview(this.closest('.ingredient-line'))">
+                            <select name="uom_1" id="uom_1"
+                                    onchange="updatePreview(this.closest('.ingredient-line'))">
                                 <option value="">– eenheid –</option>
                                 {% for uom in uom_data %}
                                 <option value="{{ uom.UomName }}">{{ uom.UomName }}</option>
@@ -208,11 +209,6 @@
                                     {{ article.NameSingle }}
                                 </option>
                                 {% endfor %}
-                            </select>
-                            <select name="singleplural_1" id="singleplural_1"
-                                    onchange="updatePreview(this.closest('.ingredient-line'))">
-                                <option value="SINGLE">Enkelvoud</option>
-                                <option value="PLURAL" selected>Meervoud</option>
                             </select>
                             <div class="name-preview" data-preview></div>
                             <input type="text" name="remark_1" id="remark_1"
@@ -251,10 +247,23 @@
         };
         {% endfor %}
 
+        // ── Enkelvoud/meervoud volgt automatisch uit eenheid + aantal ─────────
+        // (zelfde regel als single_plural_for in recipe_db.py)
+        function isCountUom(name) {
+            const n = String(name || '').trim().toLowerCase();
+            return n === '' || n === '.' || /^stuk(\(s\)|s)?$/.test(n);
+        }
+        function singlePlural(qty, uomName) {
+            if (!isCountUom(uomName)) return 'SINGLE';
+            const q = parseFloat(String(qty || '').replace(',', '.'));
+            return q > 1 ? 'PLURAL' : 'SINGLE';
+        }
+
         // ── Update naam-preview ───────────────────────────────────────────────
         function updatePreview(lineDiv) {
             const articleVal = lineDiv.querySelector('[name^="article_"]').value;
-            const spVal      = lineDiv.querySelector('[name^="singleplural_"]').value;
+            const spVal      = singlePlural(lineDiv.querySelector('[name^="qty_"]').value,
+                                            lineDiv.querySelector('[name^="uom_"]').value);
             const preview    = lineDiv.querySelector('[data-preview]');
             if (!preview) return;
             if (!articleVal || !articleData[articleVal]) {
@@ -282,15 +291,12 @@
             div.className = 'ingredient-line';
             div.setAttribute('data-line', n);
             div.innerHTML = `
-                <input type="number" step="0.1" min="0" name="qty_${n}" id="qty_${n}" placeholder="1" class="qty-input">
-                <select name="uom_${n}" id="uom_${n}">${uomOptions}</select>
+                <input type="number" step="0.1" min="0" name="qty_${n}" id="qty_${n}" placeholder="1" class="qty-input"
+                       oninput="updatePreview(this.closest('.ingredient-line'))">
+                <select name="uom_${n}" id="uom_${n}"
+                        onchange="updatePreview(this.closest('.ingredient-line'))">${uomOptions}</select>
                 <select name="article_${n}" id="article_${n}"
                         onchange="updatePreview(this.closest('.ingredient-line'))">${articleOptions}</select>
-                <select name="singleplural_${n}" id="singleplural_${n}"
-                        onchange="updatePreview(this.closest('.ingredient-line'))">
-                    <option value="SINGLE">Enkelvoud</option>
-                    <option value="PLURAL" selected>Meervoud</option>
-                </select>
                 <div class="name-preview" data-preview></div>
                 <input type="text" name="remark_${n}" id="remark_${n}" placeholder="opmerking (max 20)" maxlength="20">
                 <button type="button" class="btn-delete-line" onclick="removeLine(this)" title="Verwijder regel">

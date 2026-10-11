@@ -48,7 +48,7 @@ De VLOOKUP-formules rekenen op deze types. Een ArticleId die als getal wordt ges
 ## Regels
 
 - **Eenheden** heten in enkelvoud plus meervoud: `stuk(s)`, `teentje(s)`, `blik(ken)`. Claude mag `stuk`, `stuks`, `stuk(s)` of `tenen` schrijven; de server koppelt dat aan het juiste UomId.
-- **SinglePlural**: `SINGLE` als Qty ≤ 1, anders `PLURAL`. Dit bepaalt of NameSingle of NamePlural getoond wordt.
+- **SinglePlural**: wordt automatisch bepaald, je kiest het niet meer zelf. Bij een telbare eenheid (`stuk(s)`, `.` of geen eenheid): `SINGLE` als Qty ≤ 1, anders `PLURAL` ("1 ui", "2 uien"). Bij alle andere eenheden altijd `SINGLE` ("250 g spitskool", "2 blik(ken) reuzenbonen"). Dit bepaalt of NameSingle of NamePlural getoond wordt. De regel staat in `single_plural_for` in `recipe_db.py`.
 - **Qty**: getal groter dan 0, maximaal 1 decimaal.
 - **ArticleRemark**: maximaal 20 tekens.
 - **Persons**: maximaal 10 tekens.

@@ -7,7 +7,7 @@ Schrijven gaat altijd in twee stappen:
 from __future__ import annotations
 
 import os
-from typing import Callable, Literal
+from typing import Callable
 
 from pydantic import BaseModel, Field
 
@@ -46,9 +46,6 @@ class IngredientIn(BaseModel):
     article: str = Field(description="Artikelnaam (bestaand artikel, enkel- of meervoud; nieuw artikel: enkelvoud).")
     remark: str = Field("", description="Bewerking/opmerking, max 20 tekens, bijv. 'gesnipperd'.")
     article_plural: str | None = Field(None, description="Alleen voor een NIEUW artikel: meervoudsvorm.")
-    single_plural: Literal["SINGLE", "PLURAL"] | None = Field(
-        None, description="Optioneel. Standaard SINGLE bij qty <= 1, anders PLURAL."
-    )
 
     def to_ingredient(self) -> Ingredient:
         return Ingredient(**self.model_dump())

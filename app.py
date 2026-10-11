@@ -3,7 +3,7 @@ import datetime
 import hmac
 import os
 
-from recipe_db import RecipeDB
+from recipe_db import RecipeDB, single_plural_for
 from sheets import SHEET_NAME, get_client
 
 app = Flask(__name__)
@@ -359,7 +359,6 @@ def add_ingredients(recipe_id):
                 uom = request.form.get(f'uom_{i}', '').strip()
                 article = request.form.get(f'article_{i}', '').strip()
                 remark = request.form.get(f'remark_{i}', '').strip()
-                single_plural = request.form.get(f'singleplural_{i}', 'PLURAL').strip()
 
                 if not qty and not uom and not article:
                     i += 1
@@ -377,7 +376,7 @@ def add_ingredients(recipe_id):
 
                 ingredients_data.append({
                     'qty': qty_float if qty_float != int(qty_float) else int(qty_float),
-                    'uom': uom, 'article': article, 'remark': remark, 'single_plural': single_plural,
+                    'uom': uom, 'article': article, 'remark': remark,
                 })
                 i += 1
 
@@ -410,12 +409,13 @@ def add_ingredients(recipe_id):
                 if not art or not art.get('ArticleId'):
                     return f"Invalid Article selected: {ing['article']}", 400
 
-                display = art['NameSingle'] if ing['single_plural'] == 'SINGLE' else art['NamePlural']
+                single_plural = single_plural_for(ing['qty'], ing['uom'])
+                display = art['NameSingle'] if single_plural == 'SINGLE' else art['NamePlural']
                 line_data_dict = {
                     'Key': next_key, 'RecipeId': recipe_id, 'LineId': line_id,
                     'Qty': ing['qty'], 'UomId': uom_id, 'ArticleId': art['ArticleId'],
                     'Article': display, 'ArticleRemark': ing['remark'], 'Remark': ing['remark'],
-                    'SinglePlural': ing['single_plural'],
+                    'SinglePlural': single_plural,
                 }
                 rows.append(line_data_dict)
                 next_key += 1
@@ -829,6 +829,8 @@ def save_recipe_lines(recipe_id):
 
         lines_sheet = get_gsheet().open("Recepten").worksheet("Lines")
         lines_data = lines_sheet.get_all_records()
+        uom_by_id = {str(u.get('UomId', '')).strip(): u.get('UomName', '')
+                     for u in get_gsheet().open("Recepten").worksheet("Uom").get_all_records()}
 
         def fields(src):
             remark = src.get('ArticleRemark', '')
@@ -838,7 +840,8 @@ def save_recipe_lines(recipe_id):
                 'UomId': _num(src.get('UomId', '')),
                 'ArticleRemark': remark,
                 'Remark': remark,
-                'SinglePlural': src.get('SinglePlural', 'PLURAL'),
+                'SinglePlural': single_plural_for(src.get('Qty', ''),
+                                                  uom_by_id.get(str(src.get('UomId', '')).strip(), '')),
             }
 
         # Bestaande regels bijwerken – match op RecipeId + LineId (LineId is NIET globaal uniek!)

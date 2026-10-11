@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from fake_sheets import sample_spreadsheet  # noqa: E402
-from recipe_db import Ingredient, RecipeDB, RecipeError, _shift_rows, parse_qty  # noqa: E402
+from recipe_db import Ingredient, RecipeDB, RecipeError, _shift_rows, parse_qty, single_plural_for  # noqa: E402
 
 
 def db_for(ss):
@@ -240,3 +240,33 @@ def test_sheet_grows_when_full():
     db = db_for(ss)
     db.apply(new_plan(db))
     assert ("add_rows", 3) in ws.calls
+
+
+@pytest.mark.parametrize("qty, uom, expected", [
+    (1, "stuk(s)", "SINGLE"),
+    (2, "stuk(s)", "PLURAL"),
+    ("1,5", "stuks", "PLURAL"),
+    (0.5, "stuk", "SINGLE"),
+    (3, ".", "PLURAL"),
+    (3, "", "PLURAL"),
+    (250, "g", "SINGLE"),
+    (3, "el", "SINGLE"),
+    (2, "blik(ken)", "SINGLE"),
+    (3, "teentje(s)", "SINGLE"),
+])
+def test_single_plural_follows_unit(qty, uom, expected):
+    assert single_plural_for(qty, uom) == expected
+
+
+def test_plan_derives_single_plural_from_unit():
+    db = db_for(sample_spreadsheet())
+    plan = db.plan_new_recipe("Roerbak", {}, [
+        Ingredient(qty=250, uom="g", article="spitskool", article_plural="spitskolen"),
+        Ingredient(qty=2, uom="stuk", article="ui"),
+        Ingredient(qty=30, uom="g", article="pijnboompit"),
+    ])
+    assert plan.summary["Ingrediënten"] == [
+        "250 g spitskool  [NIEUW ARTIKEL]",
+        "2 stuk(s) uien",
+        "30 g pijnboompit",
+    ]

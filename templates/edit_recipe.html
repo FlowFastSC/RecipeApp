@@ -57,7 +57,7 @@
         /* Ingredient lines table */
         .ingredient-line {
             display: grid;
-            grid-template-columns: 2fr 80px 120px 110px 1.2fr 1.2fr 36px;
+            grid-template-columns: 2fr 80px 120px 1.2fr 1.2fr 36px;
             gap: 8px;
             align-items: center;
             margin-bottom: 8px;
@@ -171,7 +171,7 @@
         /* Column headers row above ingredient lines */
         .ingredient-col-headers {
             display: grid;
-            grid-template-columns: 2fr 80px 120px 110px 1.2fr 1.2fr 36px;
+            grid-template-columns: 2fr 80px 120px 1.2fr 1.2fr 36px;
             gap: 8px;
             padding: 0 10px 4px 10px;
             font-size: 0.75rem;
@@ -276,7 +276,6 @@
                     <span>Artikel</span>
                     <span>Aantal</span>
                     <span>Eenheid</span>
-                    <span>Enkv/Meerv</span>
                     <span>Opmerking</span>
                     <span>Naam weergave</span>
                     <span></span>
@@ -298,9 +297,11 @@
                         </select>
                         <!-- Qty -->
                         <input type="number" step="0.01" name="Qty" value="{{ line.Qty or '' }}"
-                               class="qty-input" data-lineid="{{ line.LineId }}" placeholder="0">
+                               class="qty-input" data-lineid="{{ line.LineId }}" placeholder="0"
+                               oninput="updateNamePreview(this.closest('.ingredient-line'))">
                         <!-- Uom dropdown -->
-                        <select name="UomId" class="uom-select" data-lineid="{{ line.LineId }}">
+                        <select name="UomId" class="uom-select" data-lineid="{{ line.LineId }}"
+                                onchange="updateNamePreview(this.closest('.ingredient-line'))">
                             <option value="">– eenheid –</option>
                             {% for uom in all_uoms %}
                                 <option value="{{ uom.UomId }}"
@@ -308,12 +309,6 @@
                                     {{ uom.UomName }}
                                 </option>
                             {% endfor %}
-                        </select>
-                        <!-- SinglePlural dropdown -->
-                        <select name="SinglePlural" class="singleplural-select"
-                                onchange="updateNamePreview(this.closest('.ingredient-line'))">
-                            <option value="SINGLE" {% if line.get('SinglePlural') == 'SINGLE' %}selected{% endif %}>Enkelvoud</option>
-                            <option value="PLURAL" {% if line.get('SinglePlural', 'PLURAL') == 'PLURAL' %}selected{% endif %}>Meervoud</option>
                         </select>
                         <!-- Remark -->
                         <input type="text" name="ArticleRemark" value="{{ line.ArticleRemark or '' }}"
@@ -342,17 +337,14 @@
                                 <option value="{{ article.ArticleId }}">{{ article.NameSingle }}</option>
                             {% endfor %}
                         </select>
-                        <input type="number" step="0.01" name="Qty" placeholder="0">
-                        <select name="UomId" class="uom-select">
+                        <input type="number" step="0.01" name="Qty" placeholder="0"
+                               oninput="updateNamePreview(this.closest('.ingredient-line'))">
+                        <select name="UomId" class="uom-select"
+                                onchange="updateNamePreview(this.closest('.ingredient-line'))">
                             <option value="">– eenheid –</option>
                             {% for uom in all_uoms %}
                                 <option value="{{ uom.UomId }}">{{ uom.UomName }}</option>
                             {% endfor %}
-                        </select>
-                        <select name="SinglePlural" class="singleplural-select"
-                                onchange="updateNamePreview(this.closest('.ingredient-line'))">
-                            <option value="SINGLE">Enkelvoud</option>
-                            <option value="PLURAL" selected>Meervoud</option>
                         </select>
                         <input type="text" name="ArticleRemark" placeholder="opmerking">
                         <div class="name-preview" data-preview></div>
@@ -394,17 +386,31 @@
             {% endfor %}
         };
 
-        // ── Update naam-preview op basis van artikel + single/plural keuze ────
+        // ── Enkelvoud/meervoud volgt automatisch uit eenheid + aantal ─────────
+        // (zelfde regel als single_plural_for in recipe_db.py)
+        function isCountUom(name) {
+            const n = String(name || '').trim().toLowerCase();
+            return n === '' || n === '.' || /^stuk(\(s\)|s)?$/.test(n);
+        }
+        function singlePlural(qty, uomName) {
+            if (!isCountUom(uomName)) return 'SINGLE';
+            const q = parseFloat(String(qty || '').replace(',', '.'));
+            return q > 1 ? 'PLURAL' : 'SINGLE';
+        }
+
+        // ── Update naam-preview op basis van artikel + eenheid + aantal ───────
         function updateNamePreview(lineDiv) {
             const articleId = lineDiv.querySelector('[name="ArticleId"]').value;
-            const singlePlural = lineDiv.querySelector('[name="SinglePlural"]').value;
+            const uomSel = lineDiv.querySelector('[name="UomId"]');
+            const uomName = uomSel.value ? uomSel.options[uomSel.selectedIndex].text : '';
+            const sp = singlePlural(lineDiv.querySelector('[name="Qty"]').value, uomName);
             const preview = lineDiv.querySelector('[data-preview]');
             if (!preview) return;
             if (!articleId || !articleData[articleId]) {
                 preview.textContent = '';
                 return;
             }
-            preview.textContent = singlePlural === 'SINGLE'
+            preview.textContent = sp === 'SINGLE'
                 ? articleData[articleId].single
                 : articleData[articleId].plural;
         }
@@ -456,13 +462,12 @@
                 const qty = div.querySelector('[name="Qty"]').value;
                 const uomId = div.querySelector('[name="UomId"]').value;
                 const remark = div.querySelector('[name="ArticleRemark"]').value;
-                const singlePlural = div.querySelector('[name="SinglePlural"]').value;
 
                 if (lineId && !div.classList.contains('new-line')) {
-                    existingLines.push({ LineId: lineId, ArticleId: articleId, Qty: qty, UomId: uomId, ArticleRemark: remark, SinglePlural: singlePlural });
+                    existingLines.push({ LineId: lineId, ArticleId: articleId, Qty: qty, UomId: uomId, ArticleRemark: remark });
                 } else {
                     if (articleId) {
-                        newLines.push({ ArticleId: articleId, Qty: qty, UomId: uomId, ArticleRemark: remark, SinglePlural: singlePlural });
+                        newLines.push({ ArticleId: articleId, Qty: qty, UomId: uomId, ArticleRemark: remark });
                     }
                 }
             });

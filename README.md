@@ -88,7 +88,7 @@ Beschikbare tools:
 De databaseregels worden in `recipe_db.py` afgedwongen:
 - Key en RecipeId tellen op.
 - LineId is uniek per recept.
-- SINGLE/PLURAL wordt afgeleid uit Qty.
+- SINGLE/PLURAL wordt afgeleid uit eenheid en Qty: alleen bij `stuk(s)` (of geen eenheid) en Qty > 1 meervoud, anders enkelvoud.
 - Qty heeft maximaal 1 decimaal.
 - Een opmerking is maximaal 20 tekens; Persons maximaal 10 tekens.
 - Schrijven gebeurt in batches, om binnen de Google API-quota te blijven.

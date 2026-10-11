@@ -169,3 +169,31 @@ def test_webapp_writes_keep_sheet_structure(env):
     # nieuw recept via de webapp: RecipeId als tekst
     client.post("/add", auth=auth, data={"title": "Nieuw gerecht"})
     assert main.raw(len(main.rows), "RecipeId") == "3"
+
+
+def test_edit_screen_ignores_client_single_plural(env):
+    """SinglePlural volgt uit eenheid + aantal, ook als de browser iets anders meestuurt."""
+    client, ss = env
+    auth = ("recepten", "geheim")
+    r = client.post("/save_recipe_lines/2", auth=auth, json={
+        "existing": [{"LineId": 1, "ArticleId": "3", "Qty": "300", "UomId": "5005",
+                      "ArticleRemark": "", "SinglePlural": "PLURAL"}],
+        "new": [{"ArticleId": "4", "Qty": "3", "UomId": "5002", "ArticleRemark": ""}]})
+    assert r.json() == {"success": True}
+    rows = [l for l in ss.worksheet("Lines").get_all_records() if l["RecipeId"] == 2]
+    assert rows[0]["SinglePlural"] == "SINGLE"      # 300 g → enkelvoud
+    assert rows[-1]["SinglePlural"] == "PLURAL"     # 3 stuk(s) → meervoud
+
+
+def test_add_ingredients_form_derives_single_plural(env):
+    client, ss = env
+    auth = ("recepten", "geheim")
+    page = client.get("/add_ingredients/2", auth=auth)
+    assert "singleplural" not in page.text and "Enkv/Meerv" not in page.text
+    r = client.post("/add_ingredients/2", auth=auth, follow_redirects=False, data={
+        "qty_1": "2", "uom_1": "stuk(s)", "article_1": "ui", "remark_1": "",
+        "qty_2": "200", "uom_2": "g", "article_2": "linze", "remark_2": "",
+    })
+    assert r.status_code in (302, 303), r.text
+    rows = [l for l in ss.worksheet("Lines").get_all_records() if l["RecipeId"] == 2]
+    assert [x["SinglePlural"] for x in rows[-2:]] == ["PLURAL", "SINGLE"]

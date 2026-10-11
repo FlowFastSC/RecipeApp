@@ -57,6 +57,7 @@ Handmatig deployen kan altijd: Coolify → app → **Actions → Deploy**, of op
    | `MCP_TOKEN` | Lange willekeurige string (min. 24 tekens) |
    | `APP_BASE_URL` | `https://<jouw-domein>` |
    | `APP_PASSWORD` | Optioneel: wachtwoord voor de webapp |
+   | `CACHE_SECONDS` | Optioneel (default 300): hoe lang gelezen tabbladen bewaard blijven. Wijzigingen via app of Claude zijn direct zichtbaar; rechtstreeks in Google Sheets na maximaal deze tijd. |
 
    Willekeurige strings maak je met `python -c "import secrets;print(secrets.token_urlsafe(32))"`.
    Zet bij de geheime variabelen alleen *Runtime* aan (niet *Buildtime*).

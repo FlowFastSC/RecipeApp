@@ -4,7 +4,7 @@ import hmac
 import os
 
 from recipe_db import RecipeDB, single_plural_for
-from sheets import SHEET_NAME, get_client
+from sheets import get_spreadsheet
 
 app = Flask(__name__)
 # Geheime sleutel voor sessies: altijd via omgevingsvariabele (zie .env.example)
@@ -37,22 +37,32 @@ def health():
 
 #-------------------------SECTION 1 CONNECT TO GOOGLE SHEETS ----------------------------------------------------------
 class _Client:
-    """Dunne wrapper zodat bestaande code `client.open("Recepten")` blijft werken,
-    maar de spreadsheetnaam uit SHEET_NAME komt."""
-    def __init__(self, client):
-        self._client = client
-
+    """Dunne wrapper zodat bestaande code `client.open("Recepten")` blijft werken.
+    Geeft de gedeelde, gecachte spreadsheet terug (zie sheets.py): één keer openen,
+    alle tabbladen in één aanroep ophalen en een paar minuten bewaren."""
     def open(self, _name=None):
-        return self._client.open(SHEET_NAME)
+        return get_spreadsheet()
 
 
 def get_gsheet():
-    return _Client(get_client())
+    return _Client()
 
 
 def _db():
     """Veilige schrijfhulp: alleen eigen kolommen, id's als tekst, formules in nieuwe rijen overnemen."""
-    return RecipeDB(get_client().open(SHEET_NAME))
+    return RecipeDB(get_spreadsheet())
+
+
+# Endpoints met POST die niets naar de sheet schrijven (alleen weekkeuze)
+_READ_ONLY_POSTS = {"weekly_recipes"}
+
+
+@app.before_request
+def fresh_data_for_writes():
+    """Voor elke schrijfactie verse gegevens ophalen, zodat nieuwe Keys en
+    rijnummers nooit op een verouderde cache gebaseerd zijn."""
+    if request.method not in ("GET", "HEAD", "OPTIONS") and request.endpoint not in _READ_ONLY_POSTS:
+        get_spreadsheet().invalidate()
 
 
 def _remark(line):

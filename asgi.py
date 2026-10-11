@@ -15,7 +15,7 @@ from a2wsgi import WSGIMiddleware
 from app import app as flask_app
 from mcp_server import build_server
 from recipe_db import RecipeDB
-from sheets import get_client, SHEET_NAME
+from sheets import get_spreadsheet
 
 log = logging.getLogger("recepten")
 
@@ -26,7 +26,17 @@ if MCP_TOKEN and len(MCP_TOKEN) < 24:
 
 MCP_PATH = f"/mcp/{MCP_TOKEN}" if MCP_TOKEN else None
 
-mcp = build_server(lambda: RecipeDB(get_client().open(SHEET_NAME)))
+
+
+def _mcp_db() -> RecipeDB:
+    # Claude werkt altijd met verse gegevens (voorstellen en bevestigingscodes
+    # moeten op de actuele sheet gebaseerd zijn); dit leegt ook de webcache.
+    ss = get_spreadsheet()
+    ss.invalidate()
+    return RecipeDB(ss)
+
+
+mcp = build_server(_mcp_db)
 mcp_app = mcp.streamable_http_app(
     streamable_http_path=MCP_PATH or "/mcp/uitgeschakeld",
     stateless_http=True,

@@ -31,13 +31,13 @@ def env(monkeypatch):
     monkeypatch.setenv("APP_PASSWORD", "geheim")
     import sheets
     monkeypatch.setattr(sheets, "get_client", lambda: FakeClient(ss))
+    sheets.get_store.cache_clear()
     for mod in ("app", "asgi"):
         sys.modules.pop(mod, None)
     asgi = importlib.import_module("asgi")
-    monkeypatch.setattr(asgi, "get_client", lambda: FakeClient(ss))
-    monkeypatch.setattr(sys.modules["app"], "get_client", lambda: FakeClient(ss))
     with TestClient(asgi.app) as client:
         yield client, ss
+    sheets.get_store.cache_clear()
 
 
 HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
@@ -197,3 +197,47 @@ def test_add_ingredients_form_derives_single_plural(env):
     assert r.status_code in (302, 303), r.text
     rows = [l for l in ss.worksheet("Lines").get_all_records() if l["RecipeId"] == 2]
     assert [x["SinglePlural"] for x in rows[-2:]] == ["PLURAL", "SINGLE"]
+
+
+def test_pages_read_sheet_once_and_writes_refresh(env, monkeypatch):
+    """Alle tabbladen in één aanroep, daarna uit de cache; een wijziging is direct zichtbaar."""
+    client, ss = env
+    import fake_sheets
+    single_reads = []
+    orig = fake_sheets.FakeWorksheet.get_all_records
+    monkeypatch.setattr(fake_sheets.FakeWorksheet, "get_all_records",
+                        lambda self: single_reads.append(self.title) or orig(self))
+    auth = ("recepten", "geheim")
+
+    for _ in range(3):
+        assert "Pasta pesto" in client.get("/select_recipe/1", auth=auth).text
+    page = client.get("/weekly_recipes", auth=auth)
+    assert "Pasta pesto" in page.text
+    assert ss.batch_gets == 1 and single_reads == []
+
+    # weekmenu-rij leegmaken via de webapp → volgende pagina toont verse data
+    key = next(r[0] for r in ss.worksheet("Jaar").rows[1:] if r[3] == 1)
+    client.post("/delete_recipe", auth=auth, data={"RecipeId": "1", "Key": str(key)})
+    assert "Pasta pesto" not in client.get("/weekly_recipes", auth=auth).text
+    assert single_reads == []
+
+
+def test_mcp_always_sees_fresh_data(env):
+    client, ss = env
+    auth = ("recepten", "geheim")
+    client.get("/select_recipe/1", auth=auth)              # vult de cache
+    ss.worksheet("RecipeMain").rows.append([3, "3", "Direct in sheet getypt"])
+    init(client)
+    res = call(client, "zoek_recepten", {"zoekterm": "getypt"})
+    assert [r["Title"] for r in res["recepten"]] == ["Direct in sheet getypt"]
+
+
+def test_records_match_gspread_semantics():
+    from sheets import _to_records
+    vals = [["A", "B", "C"], ["1", "x"], [], ["0012", "2.5", "'7"]]
+    assert _to_records(vals) == [
+        {"A": 1, "B": "x", "C": ""},
+        {"A": "", "B": "", "C": ""},     # lege rij blijft staan: rij-index = sheetrij
+        {"A": 12, "B": 2.5, "C": "'7"},
+    ]
+    assert _to_records([]) == []

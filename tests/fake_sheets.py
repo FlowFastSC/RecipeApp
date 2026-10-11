@@ -6,7 +6,10 @@ Gedraagt zich op de punten die ertoe doen zoals Google Sheets:
 - formules blijven als formule staan; get(..., FORMULA) geeft ze terug
 """
 import copy
+import datetime
 import re
+
+_WEEK = datetime.date.today().isocalendar()[1]
 
 
 def _numericise(v):
@@ -114,6 +117,15 @@ class FakeSpreadsheet:
     def worksheet(self, name):
         return self.sheets[name]
 
+    def values_batch_get(self, ranges, params=None):
+        """Zoals de Sheets API: opgemaakte waarden als tekst, één aanroep."""
+        self.batch_gets = getattr(self, "batch_gets", 0) + 1
+        out = []
+        for rng in ranges:
+            ws = self.sheets[rng.strip("'")]   # onbekend tabblad → fout, zoals de echte API
+            out.append({"range": rng, "values": [["" if v is None else str(v) for v in r] for r in ws.rows]})
+        return {"valueRanges": out}
+
     def snapshot(self):
         return {n: copy.deepcopy(ws.rows) for n, ws in self.sheets.items()}
 
@@ -171,5 +183,16 @@ def sample_spreadsheet():
             [6, 5006, "tl"],
             [7, 5012, "l"],
             [8, 9999, "UOM ontbreekt"],
+        ],
+        # 7 vaste rijen per week; RecipeId is hier een getal (zie DB_structuur)
+        "Jaar": [["Key", "Week", "Dag", "RecipeId"]] + [
+            [i + 1, wk, dag, 1 if (wk == _WEEK and dag == "ma") else ""]
+            for i, (wk, dag) in enumerate((w, d) for w in (_WEEK, _WEEK + 1)
+                                          for d in ("ma", "di", "wo", "do", "vr", "za", "zo"))
+        ],
+        "Week_status": [
+            ["Key", "Week", "Status"],
+            [1, _WEEK, "not_approved"],
+            [2, _WEEK + 1, "not_approved"],
         ],
     })

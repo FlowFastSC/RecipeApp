@@ -34,7 +34,7 @@ pytest                                                # tests
 |---|---|
 | Server | Unraid `192.168.3.177`, Coolify-project **Recepten** → app `recipe-app` (uuid `1apirkkbwtvrvflz8bw5yff9`) |
 | Container | Dockerfile, poort 8000, gemapt op host-poort **3020** |
-| Publiek | `https://recepten.francinenielander.nl` via Cloudflare-tunnel `pallet-stacker` → `http://192.168.3.177:3020` |
+| Publiek | `https://recepten.francinenielander.nl` via Cloudflare-tunnel `rl227-prive` (eigen apps; voorheen `pallet-stacker`, nu `rl227-business`) → `http://192.168.3.177:3020` |
 | Deploy | GitHub Action `.github/workflows/deploy.yml`: bij elke push naar `main` → tests → Coolify-API-deploy |
 
 **Eenmalig nodig voor automatisch deployen:**
@@ -61,7 +61,7 @@ Handmatig deployen kan altijd: Coolify → app → **Actions → Deploy**, of op
 
    Willekeurige strings maak je met `python -c "import secrets;print(secrets.token_urlsafe(32))"`.
    Zet bij de geheime variabelen alleen *Runtime* aan (niet *Buildtime*).
-4. **Cloudflare-tunnel:** voeg in de tunnel een *published application* toe: `recepten.<domein>` → `http://192.168.3.177:3020`. HTTPS is nodig voor de Claude-connector.
+4. **Cloudflare-tunnel:** voeg in de tunnel `rl227-prive` een *published application* toe: `recepten.<domein>` → `http://192.168.3.177:3020`. HTTPS is nodig voor de Claude-connector.
 5. Controleer na deploy: `https://<jouw-domein>/health` geeft `ok`.
 
 ## Claude-connector (recepten toevoegen en wijzigen vanuit Claude)

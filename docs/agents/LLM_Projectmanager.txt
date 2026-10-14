@@ -27,7 +27,7 @@ TECHNISCHE STACK
   - Database : Google Sheets via gspread (zie tabeloverzicht hieronder)
   - Code     : GitHub – FlowFastSC/RecipeApp (branch main)
   - Hosting  : eigen Unraid-server (192.168.3.177) via Coolify, Docker
-  - Publiek  : https://recepten.francinenielander.nl via Cloudflare-tunnel
+  - Publiek  : https://recepten.francinenielander.nl via Cloudflare-tunnel rl227-prive
   - Deploy   : elke push naar main → GitHub Action (tests) → Coolify-deploy
   - LLM      : Claude, met connector "Recepten" (MCP) voor lezen/schrijven van recepten
 
